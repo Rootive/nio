@@ -1,4 +1,4 @@
-package org.rootive.nio;
+package org.rootive.log;
 
 import java.nio.ByteBuffer;
 
