@@ -15,34 +15,33 @@ import java.nio.channels.SocketChannel;
 //possible answer From https://stackoverflow.com/questions/7022628/extend-socketchannel-so-that-selectionkey-returns-custom-class:
 // If you need context with your SocketChannel, that's what the attachment is for. Basic answer is 'no'.
 
-public class TcpConnection{
+public class TCPConnection {
 
     enum State {
         Disconnected, Connecting, Connected, Disconnecting
     }
     @FunctionalInterface
     interface Callback {
-        void accept(TcpConnection c) throws Exception;
+        void accept(TCPConnection c) throws Exception;
     }
 
     private static final int bufferElementLength = 1024;
     private static final int hwm = 64 * 1024 * 1024;
 
     static private Callback connectionCallback;
-    static private Callback messageCallback;
+    static private Callback readCallback;
     static private Callback writeFinishedCallback;
     static private Callback hwmCallback;
-    static private Callback cancelCallback;
 
     private final SocketChannel socketChannel;
     private final ByteBufferList readBuffers = new ByteBufferList();
     private final ByteBufferList writeBuffers = new ByteBufferList();
     private SelectionKey selectionKey;
-    private State state = State.Connecting;;
+    private State state = State.Connecting;
     private EventLoop eventLoop;
-    public Object context;
+    private Object context;
 
-    public TcpConnection(SocketChannel socketChannel){
+    public TCPConnection(SocketChannel socketChannel){
         this.socketChannel = socketChannel;
     }
 
@@ -53,25 +52,32 @@ public class TcpConnection{
         return state;
     }
     public int getWriteBuffersRemaining() { return writeBuffers.totalRemaining(); }
-
-    static public void setConnectionCallback(Callback connectionCallback) {
-        TcpConnection.connectionCallback = connectionCallback;
+    public Object getContext() {
+        return context;
     }
-    static public void setMessageCallback(Callback messageCallback) {
-        TcpConnection.messageCallback = messageCallback;
+    public void setContext(Object context) {
+        this.context = context;
+    }
+    static public void setConnectionCallback(Callback connectionCallback) {
+        TCPConnection.connectionCallback = connectionCallback;
+    }
+    static public void setReadCallback(Callback readCallback) {
+        TCPConnection.readCallback = readCallback;
     }
     static public void setWriteFinishedCallback(Callback writeFinishedCallback) {
-        TcpConnection.writeFinishedCallback = writeFinishedCallback;
+        TCPConnection.writeFinishedCallback = writeFinishedCallback;
     }
     static public void setHwmCallback(Callback hwmCallback) {
-        TcpConnection.hwmCallback = hwmCallback;
-    }
-    static public void setCancelCallback(Callback cancelCallback) {
-        TcpConnection.cancelCallback = cancelCallback;
+        TCPConnection.hwmCallback = hwmCallback;
     }
 
+    @Override
+    public String toString() {
+        return socketChannel.socket().getInetAddress().toString()+
+                '@' + Integer.toHexString(hashCode());
+    }
     private void handleRead() throws Exception {
-        int res = 0;
+        int res;
         try {
             res = readBuffers.readFrom(socketChannel, bufferElementLength);
         } catch (Exception e) {
@@ -80,8 +86,8 @@ public class TcpConnection{
         }
         if (res == -1) {
             handleClose();
-        } else if (res > 0 && messageCallback != null) {
-            messageCallback.accept(this);
+        } else if (res > 0 && readCallback != null) {
+            readCallback.accept(this);
         }
     }
     private void handleWrite() throws Exception {
@@ -103,11 +109,9 @@ public class TcpConnection{
         selectionKey.interestOpsAnd(0);
         selectionKey.cancel();
         eventLoop.remove(selectionKey);
+        socketChannel.close();
         if (connectionCallback != null) {
             connectionCallback.accept(this);
-        }
-        if (cancelCallback != null) {
-            cancelCallback.accept(this);
         }
     }
     public void handleEvent() throws Exception {
@@ -134,14 +138,12 @@ public class TcpConnection{
             }
         }
         if (buffer.remaining() > 0) {
-            var old = writeBuffers.totalRemaining();
-            var current = old + buffer.remaining();
-            if (current >= hwm && old < hwm && hwmCallback != null) {
-                hwmCallback.accept(_this);
-            }
             writeBuffers.addLast(buffer);
             if (!selectionKey.isWritable()) {
                 selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
+            }
+            if (writeBuffers.totalRemaining() >= hwm && hwmCallback != null) {
+                hwmCallback.accept(_this);
             }
         }
     }
@@ -181,7 +183,6 @@ public class TcpConnection{
                 _write(byteBuffer);
             } else {
                 eventLoop.queue(() -> _write(byteBuffer));
-
             }
         }
     }

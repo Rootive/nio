@@ -39,7 +39,7 @@ public class EventLoop {
     private void wakeup() {
         selector.wakeup();
     }
-    private void handleException(Exception e) {
+    void handleException(Exception e) {
         e.printStackTrace();
     }
 
@@ -52,9 +52,7 @@ public class EventLoop {
         return ret;
     }
     public void remove(SelectionKey sk) {
-        System.out.println(Thread.currentThread().getId() + " map " + map.size());
         map.remove(sk);
-        System.out.println(Thread.currentThread().getId() + " map " + map.size());
     }
     public void start() {
         assert threadId == Thread.currentThread().getId();

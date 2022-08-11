@@ -4,20 +4,26 @@ import java.nio.ByteBuffer;
 
 public class LogLine {
     private ByteBuffer buffer;
-    public LogLine(int size) {
-        restart(size);
+    private LogLine(Logger.Level level, int size) {
+        if (level.compareTo(Logger.getLevel()) >= 0) {
+            buffer = ByteBuffer.allocate(size);
+        }
     }
-    public LogLine restart(int size) {
-        buffer = ByteBuffer.allocate(size);
-        return this;
+    static public LogLine begin(Logger.Level level) {
+        return new LogLine(level, 64);
     }
-    public LogLine write(String s) {
-        buffer.put(s.getBytes());
+    public LogLine log(String s) {
+        if (buffer != null) {
+            buffer.put(s.getBytes());
+        }
         return this;
     }
     public void end() {
-        buffer.limit(buffer.position());
-        buffer.position(0);
-        Logger.add(buffer);
+        if (buffer != null) {
+            buffer.put("\n".getBytes());
+            buffer.limit(buffer.position());
+            buffer.position(0);
+            Logger.add(buffer);
+        }
     }
 }

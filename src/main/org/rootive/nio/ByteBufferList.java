@@ -1,9 +1,11 @@
 package org.rootive.nio;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
 
@@ -11,11 +13,11 @@ public class ByteBufferList {
     private final LinkedList<ByteBuffer> buffers = new LinkedList<>();
     private int remaining;
 
-    public int writeTo(SocketChannel socketChannel) throws IOException {
+    public int writeTo(ByteChannel byteChannel) throws IOException {
         int ret = remaining;
         while (buffers.size() > 0) {
             var buffer = removeFirst();
-            socketChannel.write(buffer);
+            byteChannel.write(buffer);
             if (buffer.remaining() > 0) {
                 addFirst(buffer);
                 break;
@@ -34,11 +36,11 @@ public class ByteBufferList {
             }
         }
     }
-    public int readFrom(SocketChannel socketChannel, int elementSize) throws IOException {
+    public int readFrom(ByteChannel byteChannel, int elementSize) throws IOException {
         int ret = remaining;
         while (true) {
             ByteBuffer buffer = ByteBuffer.allocate(elementSize);
-            int res = socketChannel.read(buffer);
+            int res = byteChannel.read(buffer);
             if (res == -1) {
                 ret = -1;
                 break;
@@ -66,6 +68,14 @@ public class ByteBufferList {
             }
         }
         return remaining - ret;
+    }
+    public byte[] toByteArray() {
+        ByteBuffer ret = ByteBuffer.allocate(remaining);
+        for (var buffer : buffers) {
+            var duplicate = buffer.duplicate();
+            ret.put(duplicate);
+        }
+        return ret.array();
     }
 
     public void addFirst(ByteBuffer value) {

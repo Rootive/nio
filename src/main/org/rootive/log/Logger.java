@@ -10,6 +10,9 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Logger {
+    public enum Level {
+        All, Trace, Debug, Info, Warn, Error, Fatal, Off
+    }
     static final private ReentrantLock initLock = new ReentrantLock();
     static final private Condition initCondition = initLock.newCondition();
     static final private ReentrantLock buffersLock = new ReentrantLock();
@@ -19,7 +22,15 @@ public class Logger {
     static private ByteBufferList available;
     static private ByteBufferList fulled;
     static private OutputStream output;
+    static private Level level = Level.Off;
 
+    private Logger() {  }
+    static public Level getLevel() {
+        return level;
+    }
+    static public void setLevel(Level level) {
+        Logger.level = level;
+    }
     static private void handleException(Exception e) {
         e.printStackTrace();
     }
@@ -66,7 +77,8 @@ public class Logger {
         buffersLock.unlock();
     }
 
-    static public void init(OutputStream output) throws InterruptedException {
+    static public void start(Level level, OutputStream output) throws InterruptedException {
+        setLevel(level);
         Logger.output = output;
         bStarted.set(true);
         thread.start();
