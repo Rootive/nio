@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="nio" />
+        <module name="log" />
+        <module name="processor" />
+      </profile>
+      <profile name="Annotation profile for network" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processor name="org.rootive.processor.ClientProcessor" />
+        <module name="rpc" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="untitled" target="17" />
+    </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="log" options="" />
+      <module name="nio" options="" />
+      <module name="processor" options="" />
+      <module name="rpc" options="" />
+    </option>
+  </component>
+</project>
