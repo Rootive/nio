@@ -28,10 +28,10 @@ public class TCPConnection {
     private static final int bufferElementLength = 1024;
     private static final int hwm = 64 * 1024 * 1024;
 
-    static private Callback connectionCallback;
-    static private Callback readCallback;
-    static private Callback writeFinishedCallback;
-    static private Callback hwmCallback;
+    private Callback connectionCallback;
+    private Callback readCallback;
+    private Callback writeFinishedCallback;
+    private Callback hwmCallback;
 
     private final SocketChannel socketChannel;
     private final ByteBufferList readBuffers = new ByteBufferList();
@@ -58,17 +58,17 @@ public class TCPConnection {
     public void setContext(Object context) {
         this.context = context;
     }
-    static public void setConnectionCallback(Callback connectionCallback) {
-        TCPConnection.connectionCallback = connectionCallback;
+    public void setConnectionCallback(Callback connectionCallback) {
+        this.connectionCallback = connectionCallback;
     }
-    static public void setReadCallback(Callback readCallback) {
-        TCPConnection.readCallback = readCallback;
+    public void setReadCallback(Callback readCallback) {
+        this.readCallback = readCallback;
     }
-    static public void setWriteFinishedCallback(Callback writeFinishedCallback) {
-        TCPConnection.writeFinishedCallback = writeFinishedCallback;
+    public void setWriteFinishedCallback(Callback writeFinishedCallback) {
+        this.writeFinishedCallback = writeFinishedCallback;
     }
-    static public void setHwmCallback(Callback hwmCallback) {
-        TCPConnection.hwmCallback = hwmCallback;
+    public void setHwmCallback(Callback hwmCallback) {
+        this.hwmCallback = hwmCallback;
     }
 
     @Override

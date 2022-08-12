@@ -86,6 +86,7 @@ public class ServerStub {
         for (var _i = 1; _i < parameterCount; ++_i) {
             parameters[_i - 1] = get(parameterStrings.get(_i), parameterClasses.get(_i));
         }
+
         return function.invoke(obj, parameters);
     }
 }

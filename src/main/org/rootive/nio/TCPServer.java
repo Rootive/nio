@@ -20,13 +20,6 @@ public class TCPServer {
     private Callback connectionCallback;
     private Callback readCallback;
 
-    public TCPServer() {
-        TCPConnection.setConnectionCallback(this::onConnection);
-        TCPConnection.setReadCallback(this::onRead);
-        TCPConnection.setWriteFinishedCallback(this::onWriteFinished);
-        TCPConnection.setHwmCallback(this::onHwm);
-    }
-
     public void setThreadInitFunction(EventLoopThread.ThreadInitFunction threadInitFunction) {
         threads.setThreadInitFunction(threadInitFunction);
     }
@@ -57,7 +50,12 @@ public class TCPServer {
 
     private void onNewConnection(SocketChannel sc) {
         var e = threads.get().getEventLoop();
-        e.queue(() -> new TCPConnection(sc).register(e));
+        var connection = new TCPConnection(sc);
+        connection.setConnectionCallback(this::onConnection);
+        connection.setReadCallback(this::onRead);
+        connection.setWriteFinishedCallback(this::onWriteFinished);
+        connection.setHwmCallback(this::onHwm);
+        e.queue(() -> connection.register(e));
     }
     private void onConnection(TCPConnection connection) throws Exception {
         LogLine.begin(Logger.Level.Info).log(connection.toString() + ": " + connection.getState()).end();

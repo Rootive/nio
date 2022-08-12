@@ -20,12 +20,6 @@ public class TCPClient {
     private Callback connectionCallback;
     private Callback readCallback;
 
-    public TCPClient() {
-        TCPConnection.setConnectionCallback(this::onConnection);
-        TCPConnection.setReadCallback(this::onRead);
-        TCPConnection.setWriteFinishedCallback(this::onWriteFinished);
-        TCPConnection.setHwmCallback(this::onHwm);
-    }
     public void setConnectionCallback(Callback connectionCallback) {
         this.connectionCallback = connectionCallback;
     }
@@ -42,6 +36,10 @@ public class TCPClient {
     }
     public void open(InetSocketAddress address) throws Exception {
         connection = new TCPConnection(SocketChannel.open(address));
+        connection.setConnectionCallback(this::onConnection);
+        connection.setReadCallback(this::onRead);
+        connection.setWriteFinishedCallback(this::onWriteFinished);
+        connection.setHwmCallback(this::onHwm);
         connection.register(eventLoop);
     }
     public void start() {
