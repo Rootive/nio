@@ -3,8 +3,8 @@ package org.rootive.rpc;
 import java.util.HashMap;
 
 public class Namespace {
-    private String namespace;
-    private HashMap<String, Object> map = new HashMap<>();
+    private final String namespace;
+    private final HashMap<String, Object> map = new HashMap<>();
 
     public Namespace(Signature signature, Object obj) {
         namespace = signature.getNamespaceString();
@@ -13,8 +13,8 @@ public class Namespace {
     public Namespace(Class<?> cls) {
         namespace = Signature.namespaceStringOf(cls);
     }
-    @Override
-    public String toString() {
+
+    public String getNamespaceString() {
         return namespace;
     }
     public void autoRegisterFunctions(Class<?> cls) {

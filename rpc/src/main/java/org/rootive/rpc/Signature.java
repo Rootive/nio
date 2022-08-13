@@ -3,8 +3,8 @@ package org.rootive.rpc;
 import java.util.stream.Collectors;
 
 public class Signature {
-    private String namespaceString;
-    private String identifier;
+    private final String namespaceString;
+    private final String identifier;
 
     public static String namespaceStringOf(Object obj) {
         return obj.getClass().getName();
@@ -37,13 +37,18 @@ public class Signature {
         namespaceString = namespaceStringOf(function);
         identifier = identifierOf(function);
     }
-    public Signature(Class<?> obj, String identifier) {
-        namespaceString = namespaceStringOf(obj);
+    public Signature(Class<?> cls, String identifier) {
+        namespaceString = namespaceStringOf(cls);
         this.identifier = identifier;
     }
     @Override
     public String toString() {
         return namespaceString + '.' + identifier;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return (obj instanceof Signature) && ((Signature) obj).namespaceString.equals(namespaceString) && ((Signature) obj).identifier.equals(identifier);
     }
     public String getNamespaceString() {
         return namespaceString;

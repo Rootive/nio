@@ -22,11 +22,6 @@
             <artifactId>jackson-databind</artifactId>
             <version>2.13.3</version>
         </dependency>
-        <dependency>
-            <groupId>org.rootive</groupId>
-            <artifactId>Processor</artifactId>
-            <version>0.2</version>
-        </dependency>
     </dependencies>
 
     <build>

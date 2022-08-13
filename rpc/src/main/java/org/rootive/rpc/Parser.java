@@ -3,8 +3,8 @@ package org.rootive.rpc;
 import java.util.ArrayList;
 
 public class Parser {
-    private Signature signature;
-    private ArrayList<String> parameterStrings = new ArrayList<>();
+    private final Signature signature;
+    private final ArrayList<String> parameterStrings = new ArrayList<>();
 
     public Parser(String string) {
         var lbrac = string.lastIndexOf('(');

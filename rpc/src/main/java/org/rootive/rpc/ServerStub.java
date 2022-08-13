@@ -11,13 +11,12 @@ public class ServerStub {
 
     private final ServerStub parent;
     private final HashMap<String, Namespace> map = new HashMap<>();
-    private final ObjectMapper json = new ObjectMapper();
 
     public ServerStub(ServerStub parent) {
         this.parent = parent;
     }
     public void register(Namespace namespace) {
-        var namespaceString = namespace.toString();
+        var namespaceString = namespace.getNamespaceString();
         assert !map.containsKey(namespaceString);
         map.put(namespaceString, namespace);
     }
@@ -72,7 +71,7 @@ public class ServerStub {
             }
         }
         else {
-            return json.readValue(parameterString, parameterClass);
+            return new ObjectMapper().readValue(parameterString, parameterClass);
         }
     }
     public Object invoke(Parser p) throws JsonProcessingException, InvocationTargetException, IllegalAccessException {

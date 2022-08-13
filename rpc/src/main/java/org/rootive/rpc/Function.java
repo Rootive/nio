@@ -6,8 +6,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Function {
-    private Method method;
-    private ArrayList<Class<?>> parameterClasses = new ArrayList<>();
+    private final Method method;
+    private final ArrayList<Class<?>> parameterClasses = new ArrayList<>();
     public Function(Class<?> aClass, Method method) {
         this.method = method;
         parameterClasses.add(aClass);
