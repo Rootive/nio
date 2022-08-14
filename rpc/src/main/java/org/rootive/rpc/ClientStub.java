@@ -1,5 +1,8 @@
 package org.rootive.rpc;
 
+import java.lang.reflect.Method;
+import java.sql.Ref;
+
 //BUG Rootive: 需要对Reference统一管理吗？
 public class ClientStub {
     private final Transmission transmission;
@@ -8,11 +11,14 @@ public class ClientStub {
         this.transmission = transmission;
     }
     Transmission getTransmission() { return transmission; }
-    public Reference signatureIs(Signature s) {
+    public Reference sig(Signature s) {
         return new Reference(this, s);
     }
-    public Reference sig(Signature s) {
-        return signatureIs(s);
+    public Reference func(Function function) {
+        return sig(new Signature(function));
+    }
+    public Reference method(Method method) {
+        return func(new Function(method.getDeclaringClass(), method));
     }
 
 }

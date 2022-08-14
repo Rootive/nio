@@ -27,8 +27,7 @@ public class TCPClient {
         this.readCallback = readCallback;
     }
     public void init() throws IOException, InterruptedException {
-        Logger.start(Logger.Level.All, System.out);
-        eventLoop.init();
+        init(Logger.Level.All, System.out);
     }
     public void init(Logger.Level level, OutputStream output) throws IOException, InterruptedException {
         Logger.start(level, output);

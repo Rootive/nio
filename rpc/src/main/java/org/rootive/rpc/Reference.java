@@ -13,11 +13,8 @@ public class Reference {
     }
 
     byte[] getData() { return data; }
-    public Invoker argumentsAre(Object...args) throws IOException {
-        return new Invoker(stub, this, args);
-    }
-    public Invoker arg(Object...args) throws IOException {
-        return argumentsAre(args);
+    public Invoker arg(Object obj, Object...args) throws IOException {
+        return new Invoker(stub, this, obj, args);
     }
     @Override
     public String toString() {

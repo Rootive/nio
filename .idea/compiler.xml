@@ -7,9 +7,12 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="annotation" />
+        <module name="test" />
         <module name="nio" />
         <module name="log" />
+        <module name="nio_rpc" />
         <module name="processor" />
+        <module name="gadgets" />
       </profile>
       <profile name="Annotation profile for network" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />

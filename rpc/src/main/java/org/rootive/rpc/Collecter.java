@@ -1,18 +1,19 @@
 package org.rootive.rpc;
 
-import java.nio.ByteBuffer;
+import org.rootive.gadget.ByteBufferList;
 
 public class Collecter {
     public enum State {
         Empty, Semi, Done, Error
     }
-    private ByteBufferList buffers = new ByteBufferList();
+    private final ByteBufferList buffers = new ByteBufferList();
     private State state = State.Empty;
-    int rbrac = 0;
-    private void reset() {
+    private boolean bString;
+
+    public void clear() {
         buffers.clear();
         state = State.Empty;
-        rbrac = 0;
+        bString = false;
     }
     public State collect(ByteBufferList read) {
         if (state.compareTo(State.Done) >= 0) {
@@ -26,36 +27,35 @@ public class Collecter {
             while (bContinue && state.compareTo(State.Done) < 0) {
                 switch (state) {
                     case Empty -> {
-                        while (l < r) {
-                            if (buffer.get(l) == '@') {
-                                buffer.position(l);
-                                state = State.Semi;
-                                break;
-                            }
-                            ++l;
-                        }
-                        if (l == r) {
+                        if (l < r) {
+                            state = State.Semi;
+                        } else {
                             bContinue = false;
                         }
                     }
                     case Semi -> {
                         while (l < r) {
-                            if (buffer.get(l) == ')') {
-                                ++rbrac;
-                            }
-                            if (rbrac == 2) {
-                                var limit = l + 1;
-                                if (limit == buffer.limit()) {
-                                    buffers.addLast(buffer);
-                                } else {
-                                    ByteBuffer bufferDuplicate = buffer.duplicate();
-                                    buffer.limit(limit);
-                                    buffers.addLast(buffer);
-                                    bufferDuplicate.position(limit);
-                                    read.addFirst(bufferDuplicate);
+                            var ch = buffer.get(l);
+                            if (bString) {
+                                if (ch == '\\') {
+                                    ++l;
+                                } else if (ch == '"') {
+                                    bString = false;
                                 }
-                                state = State.Done;
-                                break;
+                            } else {
+                                if (ch == '"') {
+                                    bString = true;
+                                } else if (ch == ';') {
+                                    var duplicate = buffer.duplicate();
+                                    buffer.limit(l);
+                                    buffers.addLast(buffer);
+                                    state = State.Done;
+                                    duplicate.position(l + 1);
+                                    if (duplicate.remaining() > 0) {
+                                        read.addFirst(duplicate);
+                                    }
+                                    break;
+                                }
                             }
                             ++l;
                         }
@@ -66,6 +66,8 @@ public class Collecter {
                     }
                 }
             }
+
+
         }
         return state;
     }
@@ -75,5 +77,8 @@ public class Collecter {
     @Override
     public String toString() {
         return new String(buffers.toByteArray());
+    }
+    public byte[] toByteArray() {
+        return buffers.toByteArray();
     }
 }

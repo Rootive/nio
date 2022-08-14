@@ -16,4 +16,12 @@
         <maven.compiler.target>17</maven.compiler.target>
     </properties>
 
+    <dependencies>
+        <dependency>
+            <groupId>org.rootive</groupId>
+            <artifactId>gadgets</artifactId>
+            <version>0.2</version>
+        </dependency>
+    </dependencies>
+
 </project>

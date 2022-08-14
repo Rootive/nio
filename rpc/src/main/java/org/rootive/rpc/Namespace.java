@@ -20,8 +20,10 @@ public class Namespace {
     public void autoRegisterFunctions(Class<?> cls) {
         var methods = cls.getMethods();
         for (var method : methods) {
-            Function function = new Function(cls, method);
-            register(new Signature(function), function);
+            if (method.getDeclaringClass() != Object.class) {
+                Function function = new Function(cls, method);
+                register(new Signature(function), function);
+            }
         }
     }
     public void register(Signature signature, Object obj) {

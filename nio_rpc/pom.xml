@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>nio</artifactId>
+    <artifactId>nio_rpc</artifactId>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -19,12 +19,12 @@
     <dependencies>
         <dependency>
             <groupId>org.rootive</groupId>
-            <artifactId>log</artifactId>
+            <artifactId>nio</artifactId>
             <version>0.2</version>
         </dependency>
         <dependency>
             <groupId>org.rootive</groupId>
-            <artifactId>gadgets</artifactId>
+            <artifactId>rpc</artifactId>
             <version>0.2</version>
         </dependency>
     </dependencies>

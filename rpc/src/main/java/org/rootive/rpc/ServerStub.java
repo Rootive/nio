@@ -1,5 +1,7 @@
 package org.rootive.rpc;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 
@@ -60,32 +62,41 @@ public class ServerStub {
         }
         return ret;
     }
-    private Object get(String parameterString, Class<?> parameterClass) throws JsonProcessingException {
-        if (parameterString.length() > 2 && parameterString.charAt(0) == '@' && parameterString.charAt(1) == '.') {
-            var sub = parameterString.substring(2);
-            if (sub.equals(nullString)) {
-                return null;
-            } else {
-                Signature signature = new Signature(sub);
-                return get(signature);
+    public Object invoke(Parser p, Object context) throws JsonProcessingException, InvocationTargetException, IllegalAccessException {
+        switch (p.getType()) {
+            case Literal -> {
+                if (context instanceof Class) {
+                    return new ObjectMapper().readValue(p.getLiteral(), (Class<?>) context);
+                } else {
+                    return null;
+                }
+            }
+            case Reference -> {
+                return get(p.getSignature());
+            }
+            case Functor -> {
+                Function function = (Function) get(p.getSignature());
+                var parameterClasses = function.getParameterClasses();
+                var parameterCount = parameterClasses.size();
+                var parameterParsers = p.getParameters();
+                if (parameterCount == parameterParsers.size()) {
+                    Object obj = invoke(parameterParsers.get(0), parameterClasses.get(0));
+                    Object[] parameters = new Object[parameterCount - 1];
+                    for (var _i = 1; _i < parameterCount; ++_i) {
+                        parameters[_i - 1] = invoke(parameterParsers.get(_i), parameterClasses.get(_i));
+                    }
+                    return function.invoke(obj, parameters);
+                } else {
+                    return null;
+                }
             }
         }
-        else {
-            return new ObjectMapper().readValue(parameterString, parameterClass);
-        }
+        return null;
     }
-    public Object invoke(Parser p) throws JsonProcessingException, InvocationTargetException, IllegalAccessException {
-        Function function = (Function) get(p.getSignature());
-        var parameterStrings = p.getParameterStrings();
-        var parameterClasses = function.getParameterClasses();
-        var parameterCount = parameterStrings.size();
-        Object obj = get(parameterStrings.get(0), parameterClasses.get(0));
-        Object[] parameters = new Object[parameterCount - 1];
-        if (parameterCount != parameterClasses.size()) {  } //BUG Rootive
-        for (var _i = 1; _i < parameterCount; ++_i) {
-            parameters[_i - 1] = get(parameterStrings.get(_i), parameterClasses.get(_i));
-        }
-
-        return function.invoke(obj, parameters);
+    public byte[] invoke(Parser p) throws IOException, InvocationTargetException, IllegalAccessException {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(128);
+        new ObjectMapper().writeValue(outputStream, invoke(p, null));
+        outputStream.write(';');
+        return outputStream.toByteArray();
     }
 }

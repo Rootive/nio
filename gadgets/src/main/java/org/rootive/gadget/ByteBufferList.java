@@ -1,10 +1,12 @@
-package org.rootive.log;
+package org.rootive.gadget;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ByteChannel;
+import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
 
 public class ByteBufferList {
@@ -93,6 +95,7 @@ public class ByteBufferList {
     }
     public void clear() {
         buffers.clear();
+        remaining = 0;
     }
     public int totalRemaining() {
         return remaining;

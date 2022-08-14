@@ -1,5 +1,7 @@
 package org.rootive.nio;
 
+import org.rootive.gadget.ByteBufferList;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -17,7 +19,7 @@ import java.nio.channels.SocketChannel;
 
 public class TCPConnection {
 
-    enum State {
+    public enum State {
         Disconnected, Connecting, Connected, Disconnecting
     }
     @FunctionalInterface

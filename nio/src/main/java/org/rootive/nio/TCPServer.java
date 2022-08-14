@@ -26,16 +26,12 @@ public class TCPServer {
     public void setConnectionCallback(Callback connectionCallback) {
         this.connectionCallback = connectionCallback;
     }
-    public void setReadFinishedCallback(Callback readFinishedCallback) {
-        this.readCallback = readFinishedCallback;
+    public void setReadCallback(Callback readCallback) {
+        this.readCallback = readCallback;
     }
 
     public void init(InetSocketAddress local) throws Exception {
-        Logger.start(Logger.Level.All, System.out);
-        eventLoop.init();
-        acceptor.bind(local, this::onNewConnection);
-        acceptor.register(eventLoop);
-        threads.start();
+        init(local, Logger.Level.All, System.out);
     }
     public void init(InetSocketAddress local, Logger.Level level, OutputStream output) throws Exception {
         Logger.start(level, output);

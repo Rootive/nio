@@ -14,6 +14,9 @@
         <module>rpc</module>
         <module>Processor</module>
         <module>annotation</module>
+        <module>test</module>
+        <module>nio_rpc</module>
+        <module>gadgets</module>
     </modules>
 
     <properties>
