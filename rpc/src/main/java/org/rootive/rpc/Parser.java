@@ -1,10 +1,8 @@
 package org.rootive.rpc;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 
 public class Parser {
-    // @.org.rootive.nio.Test.test(double,Object,Array)(@.org.rootive.rpc.Int.i(),{a:1,b:2},["asd","xzc"]);
     public enum Type {
         Unknown, Literal, Reference, Functor
     }
@@ -55,6 +53,7 @@ public class Parser {
                     } else if (string.charAt(rbrac + 1) == '(' && string.charAt(end) == ')') {
                         type = Type.Functor;
                     } else {
+                        literal = string;
                         type = Type.Unknown;
                     }
                 }

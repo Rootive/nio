@@ -1,12 +1,13 @@
 package org.rootive.rpc;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
 import org.rootive.gadget.ByteBufferList;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 
 public class LocalTest {
 
@@ -43,7 +44,7 @@ public class LocalTest {
     }
 
     @Test
-    public void parser() throws ClassNotFoundException, NoSuchMethodException, IOException, InvocationTargetException, IllegalAccessException {
+    public void parser() throws ClassNotFoundException, NoSuchMethodException, IOException {
         ServerStub stub = new ServerStub(null);
         var cls = Class.forName("org.rootive.rpc.LocalTest");
 
@@ -83,4 +84,5 @@ public class LocalTest {
         System.out.println(c);
         assert list.totalRemaining() == 6;
     }
+
 }

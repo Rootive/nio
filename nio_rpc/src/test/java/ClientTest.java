@@ -1,6 +1,5 @@
 import org.junit.Test;
 import org.rootive.nio_rpc.Client;
-import org.rootive.rpc.Function;
 import org.rootive.rpc.Signature;
 
 import java.lang.reflect.Method;
@@ -15,7 +14,6 @@ public class ClientTest {
         var stub = client.getStub();
         var th = new Thread(() -> {
             try {
-
                 ImaginaryNumber n = new ImaginaryNumber(10, 10);
                 Method method1 = ImaginaryNumber.class.getMethod("add", ImaginaryNumber.class, ImaginaryNumber.class);
 

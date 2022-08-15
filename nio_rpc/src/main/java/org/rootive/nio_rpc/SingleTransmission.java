@@ -1,9 +1,12 @@
 package org.rootive.nio_rpc;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.rootive.nio.TCPClient;
 import org.rootive.rpc.Invoker;
+import org.rootive.rpc.Result;
 import org.rootive.rpc.Transmission;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -25,11 +28,11 @@ public class SingleTransmission implements Transmission {
         queueLock.unlock();
     }
 
-    public void handleRead(byte[] data) {
+    public void handleRead(byte[] data) throws IOException {
         Invoker invoker;
         queueLock.lock();
         invoker = queue.remove();
         queueLock.unlock();
-        invoker.setReturn(data);
+        invoker.setReturn(new ObjectMapper().readValue(data, Result.class));
     }
 }

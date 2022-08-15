@@ -9,13 +9,13 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Invoker {
     private final ClientStub stub;
     private final byte[] data;
-    private byte[] returnData;
+    private Result result;
     private final ReentrantLock returnLock = new ReentrantLock();
     private final Condition returnCondition = returnLock.newCondition();
 
-    public void setReturn(byte[] returnData){
+    public void setReturn(Result result) {
         returnLock.lock();
-        this.returnData = returnData;
+        this.result = result;
         returnCondition.signal();
         returnLock.unlock();
     }
@@ -49,13 +49,31 @@ public class Invoker {
         stub.getTransmission().toServer(data, this);
         return this;
     }
-    public Object ret(Class<?> returnClass) throws InterruptedException, IOException {
+    public byte[] ret() throws InterruptedException, ServerRegisterException, InvocationException, DeserializationException, SerializationException, BadParametersException, BadReferenceException {
         returnLock.lock();
-        while (returnData == null) {
+        while (result == null) {
             returnCondition.await();
         }
         returnLock.unlock();
-        return new ObjectMapper().readValue(returnData, returnClass);
+        var status = result.getStat();
+        if (status == Result.Status.BAD_REGISTER) {
+            throw new ServerRegisterException(result.getMsg());
+        } else if (status == Result.Status.INVOCATION_ERROR) {
+            throw new InvocationException(result.getMsg());
+        } else if (status == Result.Status.DESERIALIZATION_ERROR) {
+            throw new DeserializationException(result.getMsg());
+        } else if (status == Result.Status.SERIALIZATION_ERROR) {
+            throw new SerializationException(result.getMsg());
+        } else if (status == Result.Status.BAD_PARAMETERS) {
+            throw new BadParametersException(result.getMsg());
+        } else if (status == Result.Status.BAD_REFERENCE) {
+            throw new BadReferenceException(result.getMsg());
+        } else {
+            return result.getData();
+        }
+    }
+    public Object ret(Class<?> returnClass) throws SerializationException, ServerRegisterException, InvocationException, InterruptedException, DeserializationException, IOException, BadReferenceException, BadParametersException {
+        return new ObjectMapper().readValue(ret(), returnClass);
     }
     @Override
     public String toString() {

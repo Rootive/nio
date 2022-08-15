@@ -42,7 +42,7 @@ public class Client {
 
         }
     }
-    private void onRead(TCPClient client, TCPConnection c) {
+    private void onRead(TCPClient client, TCPConnection c) throws IOException {
         var buffers = c.getReadBuffers();
         while (buffers.size() > 0) {
             var state = collecter.collect(buffers);

@@ -62,7 +62,7 @@ public class ServerStub {
         }
         return ret;
     }
-    public Object invoke(Parser p, Object context) throws JsonProcessingException, InvocationTargetException, IllegalAccessException {
+    public Object invoke(Parser p, Object context) throws JsonProcessingException, InvocationTargetException, IllegalAccessException, BadParametersException, BadReferenceException {
         switch (p.getType()) {
             case Literal -> {
                 if (context instanceof Class) {
@@ -72,7 +72,11 @@ public class ServerStub {
                 }
             }
             case Reference -> {
-                return get(p.getSignature());
+                var object = get(p.getSignature());
+                if (object == null) {
+                    throw new BadReferenceException("unrecognized reference: " + p.getSignature().toString());
+                }
+                return object;
             }
             case Functor -> {
                 Function function = (Function) get(p.getSignature());
@@ -87,15 +91,45 @@ public class ServerStub {
                     }
                     return function.invoke(obj, parameters);
                 } else {
-                    return null;
+                    throw new BadParametersException("expect " + parameterCount + " parameters but " + parameterParsers.size() + " provided");
                 }
             }
+            default -> throw new BadParametersException("unrecognized signature: " + p.getLiteral());
         }
-        return null;
     }
-    public byte[] invoke(Parser p) throws IOException, InvocationTargetException, IllegalAccessException {
+    public byte[] invoke(Parser p) throws IOException {
+        Result result = new Result();
+        ObjectMapper json = new ObjectMapper();
+        Object res = null;
+        try {
+            res = invoke(p, null);
+            result.setStat(Result.Status.DONE);
+        } catch (JsonProcessingException e) {
+            result.setStat(Result.Status.DESERIALIZATION_ERROR);
+            result.setMsg(e.getMessage());
+        } catch (InvocationTargetException e) {
+            result.setStat(Result.Status.INVOCATION_ERROR);
+            result.setMsg(e.getTargetException().getMessage());
+        } catch (IllegalAccessException e) {
+            result.setStat(Result.Status.BAD_REGISTER);
+            result.setMsg(e.getMessage());
+        } catch (BadReferenceException e) {
+            result.setStat(Result.Status.BAD_REFERENCE);
+            result.setMsg(e.getMessage());
+        } catch (BadParametersException e) {
+            result.setStat(Result.Status.BAD_PARAMETERS);
+            result.setMsg(e.getMessage());
+        }
+        if (res != null) {
+            try {
+                result.setData(json.writeValueAsBytes(res));
+            } catch (JsonProcessingException e) {
+                result.setStat(Result.Status.SERIALIZATION_ERROR);
+                result.setMsg(e.getMessage());
+            }
+        }
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream(128);
-        new ObjectMapper().writeValue(outputStream, invoke(p, null));
+        new ObjectMapper().writeValue(outputStream, result);
         outputStream.write(';');
         return outputStream.toByteArray();
     }
