@@ -55,7 +55,9 @@ rpc模块不对本项目的nio模块有依赖，它通过Transmission接口与�
         boolean isTheSameAgeWith(DogInterface another);
         boolean isTheSameAgeWith(Dog another);
     }
+    
 ####2) Server部分
+
 即ServerTest类：
 
     public class ServerTest {
@@ -83,7 +85,9 @@ rpc模块不对本项目的nio模块有依赖，它通过Transmission接口与�
         }
     }
 我们注册了Dog类，同时还注册了他的两个示例。
+
 ####3) Client部分
+
 即ClientTest类，该部分有不少连接服务器的代码，这不是我们介绍的重点，因此暂时屏蔽。直接来看我们在Client端做了什么。
 
     //获取ClientStub。client是连接服务器相关的对象。
@@ -117,7 +121,9 @@ rpc模块不对本项目的nio模块有依赖，它通过Transmission接口与�
     //嵌套的2次rpc调用，调用fork将cDog存储在本地，再将cDog传给服务器调用isTheSameAgeWith
     //看起来可以合并成1次rpc，减少一次cDog的传输，这是我们下一个部分要介绍的。
     b = aDogIf.isTheSameAgeWith(bDogIf.fork("cDog"));
+
 ####4) 不使用动态代理的调用方式
+
 我们前面提到，这种不使用动态代理的调用方式不需要额外的DogInterface。因此，我们可以把与DogInterface相关的东西完全忘掉。
 
     //获取两个method。因为我们不再使用动态代理了，这种事情需要我们自己做了。
