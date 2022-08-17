@@ -84,7 +84,7 @@ rpc模块不对本项目的nio模块有依赖，它通过Transmission接口与�
             server.start();
         }
     }
-我们注册了Dog类，同时还注册了他的两个示例。
+我们注册了Dog类，同时还注册了他的两个实例。
 
 #### 3) Client部分
 
