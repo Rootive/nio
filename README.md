@@ -155,5 +155,5 @@ rpc模块不对本项目的nio模块有依赖，它通过Transmission接口与�
             stub.method(fork).arg(bDogReference, "cDog")
     ).invoke().ret(boolean.class);
 实际上，动态代理的方式本质上就是使用了这种方式。他们都会对Proxy类、Reference类、Invoker类特殊处理。
-#总结
+# 总结
 由于我对rpc具体的业务场景不熟悉，不清楚它需要哪些特性。所以我在上述介绍的引用参数、嵌套调用可能在实际中并无必要。
