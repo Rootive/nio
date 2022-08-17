@@ -22,25 +22,22 @@ public class Invoker {
         returnCondition.signal();
         returnLock.unlock();
     }
-    private void convert(Object arg, ByteArrayOutputStream outputStream) throws IOException, IllegalAccessException, UnrecognizedProxyException {
-        if (arg instanceof Reference) {
-            outputStream.write(((Reference) arg).getData());
-        } else if (arg instanceof Invoker) {
-            var argData = ((Invoker) arg).data;
-            outputStream.write(argData, 0, argData.length - 1);
+    private void convert(Object arg, ByteArrayOutputStream outputStream) throws IOException, IllegalAccessException {
+        if (arg instanceof Reference ref) {
+            assert ref.getStub() == stub;
+            outputStream.write(ref.getData());
+        } else if (arg instanceof Invoker invoker) {
+            assert invoker.stub == stub;
+            outputStream.write(invoker.data, 0, invoker.data.length - 1);
         } else if (arg instanceof Proxy) {
             var handler = h.get(arg);
-            if (handler instanceof ClientInvocationHandler) {
-                var ref = ((ClientInvocationHandler) handler).getObj();
-                outputStream.write(ref.getData());
-            } else {
-                throw new UnrecognizedProxyException("unrecognized proxy: " + arg);
-            }
+            var ref = ((ClientInvocationHandler) handler).getObj();
+            outputStream.write(ref.getData());
         } else {
             new ObjectMapper().writeValue(outputStream, arg);
         }
     }
-    Invoker(ClientStub stub, Reference reference, Object obj, Object...args) throws IOException, NoSuchFieldException, IllegalAccessException, UnrecognizedProxyException {
+    Invoker(ClientStub stub, Reference reference, Object obj, Object...args) throws IOException, NoSuchFieldException, IllegalAccessException {
         h = Proxy.class.getDeclaredField("h");
         h.setAccessible(true);
         this.stub = stub;

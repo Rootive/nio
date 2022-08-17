@@ -17,6 +17,7 @@
         <module>test</module>
         <module>nio_rpc</module>
         <module>gadgets</module>
+        <module>http</module>
     </modules>
 
     <properties>

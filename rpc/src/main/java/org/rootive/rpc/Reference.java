@@ -13,11 +13,14 @@ public class Reference {
     }
 
     byte[] getData() { return data; }
-    public Invoker arg(Object obj, Object...args) throws IOException, UnrecognizedProxyException, NoSuchFieldException, IllegalAccessException {
+    public Invoker arg(Object obj, Object...args) throws IOException, NoSuchFieldException, IllegalAccessException {
         return new Invoker(stub, this, obj, args);
     }
     @Override
     public String toString() {
         return new String(data);
+    }
+    ClientStub getStub() {
+        return stub;
     }
 }

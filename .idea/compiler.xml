@@ -11,6 +11,7 @@
         <module name="nio" />
         <module name="log" />
         <module name="nio_rpc" />
+        <module name="http" />
         <module name="processor" />
         <module name="gadgets" />
       </profile>
@@ -23,6 +24,7 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="HTTP" target="17" />
       <module name="untitled" target="17" />
     </bytecodeTargetLevel>
   </component>
