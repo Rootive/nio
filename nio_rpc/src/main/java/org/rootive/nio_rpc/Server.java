@@ -1,5 +1,6 @@
 package org.rootive.nio_rpc;
 
+import org.rootive.log.LogLine;
 import org.rootive.log.Logger;
 import org.rootive.nio.TCPConnection;
 import org.rootive.nio.TCPServer;
@@ -46,7 +47,8 @@ public class Server {
         while (buffers.size() > 0) {
             var state = context.collecter.collect(buffers);
             if (state == Collecter.State.Done) {
-                Parser parser = new Parser(context.collecter.toString());
+                var cs = context.collecter.toString();
+                Parser parser = new Parser(cs);
                 c.write(ByteBuffer.wrap(context.stub.invoke(parser)));
                 context.collecter.clear();
             } else if (state == Collecter.State.Error) {

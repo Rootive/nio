@@ -3,6 +3,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -12,6 +14,7 @@ public class Invoker {
     private Result result;
     private final ReentrantLock returnLock = new ReentrantLock();
     private final Condition returnCondition = returnLock.newCondition();
+    private final Field h;
 
     public void setReturn(Result result) {
         returnLock.lock();
@@ -19,26 +22,38 @@ public class Invoker {
         returnCondition.signal();
         returnLock.unlock();
     }
-    private void convert(Object arg, ByteArrayOutputStream outputStream) throws IOException {
+    private void convert(Object arg, ByteArrayOutputStream outputStream) throws IOException, IllegalAccessException, UnrecognizedProxyException {
         if (arg instanceof Reference) {
             outputStream.write(((Reference) arg).getData());
         } else if (arg instanceof Invoker) {
             var argData = ((Invoker) arg).data;
             outputStream.write(argData, 0, argData.length - 1);
+        } else if (arg instanceof Proxy) {
+            var handler = h.get(arg);
+            if (handler instanceof ClientInvocationHandler) {
+                var ref = ((ClientInvocationHandler) handler).getObj();
+                outputStream.write(ref.getData());
+            } else {
+                throw new UnrecognizedProxyException("unrecognized proxy: " + arg);
+            }
         } else {
             new ObjectMapper().writeValue(outputStream, arg);
         }
     }
-    Invoker(ClientStub stub, Reference reference, Object obj, Object...args) throws IOException {
+    Invoker(ClientStub stub, Reference reference, Object obj, Object...args) throws IOException, NoSuchFieldException, IllegalAccessException, UnrecognizedProxyException {
+        h = Proxy.class.getDeclaredField("h");
+        h.setAccessible(true);
         this.stub = stub;
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(args.length * 128);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         var referenceData = reference.getData();
         outputStream.write(referenceData, 0, referenceData.length);
         outputStream.write('(');
         convert(obj, outputStream);
-        for (Object arg : args) {
-            outputStream.write(',');
-            convert(arg, outputStream);
+        if (args != null) {
+            for (Object arg : args) {
+                outputStream.write(',');
+                convert(arg, outputStream);
+            }
         }
         outputStream.write(')');
         outputStream.write(';');

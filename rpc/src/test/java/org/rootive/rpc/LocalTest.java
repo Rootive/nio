@@ -3,10 +3,12 @@ package org.rootive.rpc;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
+import org.rootive.annotation.Reference;
 import org.rootive.gadget.ByteBufferList;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
 
 public class LocalTest {
@@ -24,7 +26,7 @@ public class LocalTest {
         return "m3";
     }
     @Test
-    public void clientStub() throws ClassNotFoundException, NoSuchMethodException, IOException {
+    public void clientStub() throws ClassNotFoundException, NoSuchMethodException, IOException, UnrecognizedProxyException, NoSuchFieldException, IllegalAccessException {
         ClientStub at = new ClientStub(null);
         var cls = Class.forName("org.rootive.rpc.LocalTest");
 
@@ -83,6 +85,32 @@ public class LocalTest {
         c.collect(list);
         System.out.println(c);
         assert list.totalRemaining() == 6;
+    }
+
+    interface itf {
+        void md();
+    }
+    @Test
+    public void invocationHandler() {
+        ClientStub stub = new ClientStub(null);
+        var res = stub.proxyOfInterface(itf.class, null);
+        var res2 = stub.proxyOfInterface(itf.class, null);
+
+        System.out.println(res.getClass());
+        // class org.rootive.rpc.$Proxy7
+
+        System.out.println(res.getClass().getSimpleName());
+        // $Proxy7
+
+        System.out.println(res2 instanceof Proxy); // true
+        System.out.println(res2.getClass().isInterface()); // false
+
+
+    }
+
+    @Test
+    public void proxy() throws NoSuchFieldException {
+        Proxy.class.getDeclaredField("h").setAccessible(true);
     }
 
 }

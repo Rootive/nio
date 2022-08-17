@@ -27,7 +27,6 @@ public class Namespace {
         }
     }
     public void register(Signature signature, Object obj) {
-        assert signature.getNamespaceString().equals(namespace);
         var identifier = signature.getIdentifier();
         assert !map.containsKey(identifier);
         map.put(identifier, obj);

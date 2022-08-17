@@ -3,6 +3,7 @@ package org.rootive.processor;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
+import javax.lang.model.SourceVersion;
 import javax.lang.model.element.TypeElement;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -19,15 +20,25 @@ public class ClientProcessor extends AbstractProcessor {
     }
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        log("process begin");
         var es = roundEnv.getElementsAnnotatedWith(Reference.class);
 
+        for (var e : es) {
+
+            log(e.asType());
+        }
+        log("process end");
         return true;
     }
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> ret = new TreeSet<>();
-        ret.add("org.rootive.annotation.Reference");
+        ret.add(Reference.class.getCanonicalName());
         return ret;
+    }
+    @Override
+    public SourceVersion getSupportedSourceVersion(){
+        return SourceVersion.latestSupported();
     }
 
     private void log(Object obj) {

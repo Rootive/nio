@@ -1,47 +1,42 @@
-import org.junit.Test;
 import org.rootive.nio_rpc.Client;
+import org.rootive.rpc.Reference;
 import org.rootive.rpc.Signature;
 
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 
 public class ClientTest {
-    @Test
-    public void test() throws Exception {
+    public static void main(String[] args) throws Exception {
         Client client = new Client();
         client.init();
         client.open(new InetSocketAddress("127.0.0.1", 45555));
-        var stub = client.getStub();
         var th = new Thread(() -> {
             try {
-                ImaginaryNumber n = new ImaginaryNumber(10, 10);
-                Method method1 = ImaginaryNumber.class.getMethod("add", ImaginaryNumber.class, ImaginaryNumber.class);
 
-                Object ret1 = stub
-                        .method(method1)
-                        .arg(null, n, n)
-                        .invoke()
-                        .ret(ImaginaryNumber.class);
-                System.out.println(ret1);
+                var stub = client.getStub();
 
-                Object ret2 = stub
-                        .method(method1)
-                        .arg(null, stub.sig(new Signature(ImaginaryNumber.class, "x")), n)
-                        .invoke()
-                        .ret(ImaginaryNumber.class);
-                System.out.println(ret2);
+                Signature aDogSignature = new Signature(Dog.class, "aDog");
+                Reference aDogReference = stub.sig(aDogSignature);
+                DogInterface aDogIf = (DogInterface) stub.proxyOfInterface(Dog.class, aDogReference);
 
-                Object ret3 = stub
-                        .method(method1)
-                        .arg(
-                                null,
-                                stub.method(method1).arg(null, stub.sig(new Signature(ImaginaryNumber.class, "x")), n),
-                                stub.sig(new Signature(ImaginaryNumber.class, "y"))
-                        )
-                        .invoke()
-                        .ret(ImaginaryNumber.class);
-                System.out.println(ret3);
+                Reference bDogReference = stub.sig(Dog.class, "bDog");
+                DogInterface bDogIf = (DogInterface) stub.proxyOfInterface(Dog.class, bDogReference);
 
+                boolean b;
+                Dog aDog = aDogIf.info(); System.out.println(aDog); // {"name":"aDog","age":11,"color":{"r":10,"g":101,"b":110}}
+                b = bDogIf.isTheSameAgeWith(aDog); System.out.println(b); // false
+
+                b = aDogIf.isTheSameAgeWith(bDogIf); System.out.println(b);
+
+
+                b = aDogIf.isTheSameAgeWith(bDogIf.fork("cDog")); System.out.println(b);
+
+                Method isTheSameAgeWith = Dog.class.getMethod("isTheSameAgeWith", Dog.class);
+                Method fork = Dog.class.getMethod("fork", String.class);
+                b = (boolean) stub.method(isTheSameAgeWith).arg(
+                        aDogReference,
+                        stub.method(fork).arg(bDogReference, "cDog")
+                ).invoke().ret(boolean.class); System.out.println(b);
 
             } catch (Exception e) {
                 e.printStackTrace();

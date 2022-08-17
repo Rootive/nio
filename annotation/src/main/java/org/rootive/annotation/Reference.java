@@ -6,6 +6,6 @@ import java.lang.annotation.*;
 @Documented
 @Target(value = { ElementType.FIELD, ElementType.LOCAL_VARIABLE })
 public @interface Reference {
-    String value() default "@.null";
-    String namespace() default "@.null";
+    String value() default "null";
+    String namespace() default "null";
 }
