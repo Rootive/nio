@@ -134,7 +134,7 @@ rpc模块不对本项目的nio模块有依赖，它通过Transmission接口与�
      * 为Method创建一个Signature的过程有点长，因此这种调用方式简化成：
      * ClientStub.method(...).arg(...).invoke().ret(...)
      * 通过方法名就可以轻松的猜出他的用法：
-     * 1、将要调用的Method类传入method(...)；
+     * 1、将要调用的Method对象传入method(...)；
      * 2、对象和参数传入arg()；这里会将Proxy类、Reference类识别为引用。
      * 3、接着invoke()负责发送给Server；
      * 4、将返回值的类型传入ret(...)——Json反序列化需要对应的类型，ret(...)会阻塞，直到Server回应
@@ -148,6 +148,7 @@ rpc模块不对本项目的nio模块有依赖，它通过Transmission接口与�
      * 动态代理的方式也可以嵌套的调用rpc，但正如我们在上一部分所说的，它传输了冗余的cDog数据。
      * 而这种方式将这2次调用合成一次会话——没有冗余的cDog数据传输。
      * arg()方法返回的类型是Invoker类。arg()方法会对Invoker类特殊处理。
+     * 您可以任意嵌套。只有invoke()才会真正的向服务器发送信息。我们可以认为调用了几次invoke()就发送了几次数据。
      */
     b = (boolean) stub.method(isTheSameAgeWith).arg(
             aDogReference,
