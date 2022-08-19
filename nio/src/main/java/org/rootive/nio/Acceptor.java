@@ -6,7 +6,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
-public class Acceptor {
+public class Acceptor implements Handler {
     @FunctionalInterface
     public interface Callback {
         void accept(SocketChannel sc) throws Exception;
@@ -23,7 +23,7 @@ public class Acceptor {
     }
     public void register(EventLoop eventLoop) throws IOException {
         channel.configureBlocking(false);
-        selectionKey = eventLoop.add(channel, (sk) -> handleEvent(), SelectionKey.OP_ACCEPT);
+        selectionKey = eventLoop.add(channel, SelectionKey.OP_ACCEPT, this);
     }
     public void handleEvent() throws Exception {
         newConnectionCallback.accept(channel.accept());

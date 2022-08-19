@@ -26,7 +26,7 @@ public class LocalTest {
         return "m3";
     }
     @Test
-    public void clientStub() throws ClassNotFoundException, NoSuchMethodException, IOException, UnrecognizedProxyException, NoSuchFieldException, IllegalAccessException {
+    public void clientStub() throws ClassNotFoundException, NoSuchMethodException, IOException, NoSuchFieldException, IllegalAccessException {
         ClientStub at = new ClientStub(null);
         var cls = Class.forName("org.rootive.rpc.LocalTest");
 

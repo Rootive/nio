@@ -7,17 +7,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
-//Rootive: TcpConnection是对SocketChannel的封装，保存了与连接相关的东西，如读写缓冲区。
-//现在有一个难题：Selector返回的是SelectableChannel，我们需要从这个SelectableChannel得到封装它的TcpConnection。
-//一个直观的方法都是用Map维护。但在我的设想中应该用多态实现：实现一个继承于SocketChannel的TcpConnection2，
-//即accept的时候用SocketChannel构造一个TcpConnection2，直接用新构造的TcpConnection2调用register。
-//这样做的好处就是不需要维护Map。
-//但SocketChannel是一个虚类，他的实现SocketChannelImpl是非public的。
-//所以，有没有更好的方法？
-//possible answer From https://stackoverflow.com/questions/7022628/extend-socketchannel-so-that-selectionkey-returns-custom-class:
-// If you need context with your SocketChannel, that's what the attachment is for. Basic answer is 'no'.
-
-public class TCPConnection {
+public class TCPConnection implements Handler {
 
     public enum State {
         Disconnected, Connecting, Connected, Disconnecting
@@ -35,9 +25,9 @@ public class TCPConnection {
     private Callback writeFinishedCallback;
     private Callback hwmCallback;
 
-    private final SocketChannel socketChannel;
     private final ByteBufferList readBuffers = new ByteBufferList();
     private final ByteBufferList writeBuffers = new ByteBufferList();
+    private final SocketChannel socketChannel;
     private SelectionKey selectionKey;
     private State state = State.Connecting;
     private EventLoop eventLoop;
@@ -60,6 +50,7 @@ public class TCPConnection {
     public void setContext(Object context) {
         this.context = context;
     }
+
     public void setConnectionCallback(Callback connectionCallback) {
         this.connectionCallback = connectionCallback;
     }
@@ -110,7 +101,6 @@ public class TCPConnection {
         state = State.Disconnected;
         selectionKey.interestOpsAnd(0);
         selectionKey.cancel();
-        eventLoop.remove(selectionKey);
         socketChannel.close();
         if (connectionCallback != null) {
             connectionCallback.accept(this);
@@ -152,8 +142,8 @@ public class TCPConnection {
 
     public void register(EventLoop eventLoop) throws Exception {
         socketChannel.configureBlocking(false);
-        selectionKey = eventLoop.add(socketChannel, (sk) -> handleEvent(), SelectionKey.OP_READ);
         this.eventLoop = eventLoop;
+        selectionKey = eventLoop.add(socketChannel, SelectionKey.OP_READ, this);
         state = State.Connected;
         if (connectionCallback != null) {
             connectionCallback.accept(this);

@@ -19,7 +19,7 @@ class ClientInvocationHandler implements InvocationHandler {
     public Object invoke(Object proxy, Method method, Object[] args)
             throws IOException, SerializationException, ServerRegisterException,
             InvocationException, BadReferenceException, InterruptedException,
-            DeserializationException, BadParametersException, UnrecognizedProxyException, NoSuchFieldException, IllegalAccessException {
+            DeserializationException, BadParametersException, NoSuchFieldException, IllegalAccessException {
         return stub.func(new Function(aClass, method)).arg(obj, args).invoke().ret(method.getReturnType());
     }
 

@@ -1,7 +1,7 @@
 package org.rootive.nio;
 
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectableChannel;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.nio.channels.SelectionKey;
@@ -11,21 +11,15 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class EventLoop {
     @FunctionalInterface
-    interface Handler {
-        void handle(SelectionKey sk) throws Exception;
-    }
-    @FunctionalInterface
     interface Runner {
         void run() throws Exception;
     }
 
     private static final int timeout = 10 * 1000;
-    private static final int initialCapacity = 32;
     private final long threadId = Thread.currentThread().getId();
     private final AtomicBoolean bStarted = new AtomicBoolean();
     private final AtomicBoolean bRunners = new AtomicBoolean();
     private final ReentrantLock runnersLock = new ReentrantLock();
-    private final HashMap<SelectionKey, Handler> map = new HashMap<>(initialCapacity);
     private LinkedList<Runner> runners = new LinkedList<>();
     private Selector selector;
 
@@ -43,16 +37,13 @@ public class EventLoop {
         e.printStackTrace();
     }
 
-    public void init() throws IOException {
-        selector = Selector.open();
-    }
-    public SelectionKey add(SelectableChannel sc, Handler h, int ops) throws IOException {
-        var ret = sc.register(selector, ops);
-        map.put(ret, h);
+    public SelectionKey add(SelectableChannel c, int ops, Handler h) throws ClosedChannelException {
+        var ret = c.register(selector, ops);
+        ret.attach(h);
         return ret;
     }
-    public void remove(SelectionKey sk) {
-        map.remove(sk);
+    public void init() throws IOException {
+        selector = Selector.open();
     }
     public void start() {
         assert threadId == Thread.currentThread().getId();
@@ -63,7 +54,7 @@ public class EventLoop {
                 if (selector.select(timeout) > 0) {
                     var selectedKeys = selector.selectedKeys();
                     for (var k : selectedKeys) {
-                        try { map.get(k).handle(k); }
+                        try { ((org.rootive.nio.Handler) k.attachment()).handleEvent(); }
                         catch (Exception e) { handleException(e); }
                     }
                     selectedKeys.clear();
