@@ -10,10 +10,12 @@
         <module name="test" />
         <module name="nio" />
         <module name="log" />
+        <module name="raft" />
         <module name="nio_rpc" />
         <module name="http" />
         <module name="processor" />
         <module name="gadgets" />
+        <module name="p2p" />
       </profile>
       <profile name="Annotation profile for network" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 
 public class EventLoopThreadPool {
     private int last = -1;
-    private ArrayList<EventLoopThread> threads = new ArrayList<>();
+    private final ArrayList<EventLoopThread> threads = new ArrayList<>();
 
     public EventLoopThreadPool(int count) {
         for (int _i = 0; _i < count; ++_i) {
@@ -19,6 +19,9 @@ public class EventLoopThreadPool {
         for (var th : threads) {
             th.setThreadInitFunction(threadInitFunction);
         }
+    }
+    public int count() {
+        return threads.size();
     }
 
     public void start() throws Exception {

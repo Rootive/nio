@@ -9,7 +9,7 @@ import java.util.function.Consumer;
 
 public class EventLoopThread {
     @FunctionalInterface
-    interface ThreadInitFunction {
+    public interface ThreadInitFunction {
         void accept(EventLoop eventLoop) throws Exception;
     }
 
@@ -60,6 +60,9 @@ public class EventLoopThread {
     }
     public void stop() throws InterruptedException {
         eventLoop.stop();
+        thread.join();
+    }
+    public void join() throws InterruptedException {
         thread.join();
     }
 }

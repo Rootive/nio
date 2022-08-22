@@ -6,59 +6,68 @@ import org.rootive.log.Logger;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.HashMap;
 
 public class TCPClient {
-    @FunctionalInterface
-    public interface Callback {
-        void accept(TCPClient client, TCPConnection c) throws Exception;
+    private final EventLoopThreadPool threads;
+    private InetSocketAddress local;
+    private final EventLoop eventLoop;
+    private TCPConnection.Callback connectionCallback;
+    private TCPConnection.Callback readCallback;
+
+    public TCPClient(EventLoop eventLoop, int threadsCount) {
+        threads = new EventLoopThreadPool(threadsCount);
+        this.eventLoop = eventLoop;
     }
 
-    private TCPConnection connection;
-    private final EventLoop eventLoop = new EventLoop();
-    private Callback connectionCallback;
-    private Callback readCallback;
-
-    public void setConnectionCallback(Callback connectionCallback) {
+    public void setThreadInitFunction(EventLoopThread.ThreadInitFunction threadInitFunction) {
+        threads.setThreadInitFunction(threadInitFunction);
+    }
+    public void setConnectionCallback(TCPConnection.Callback connectionCallback) {
         this.connectionCallback = connectionCallback;
     }
-    public void setReadCallback(Callback readCallback) {
+    public void setReadCallback(TCPConnection.Callback readCallback) {
         this.readCallback = readCallback;
     }
-    public void init() throws IOException, InterruptedException {
-        init(Logger.Level.All, System.out);
+
+    public void init(InetSocketAddress local) throws Exception {
+        this.local = local;
+        threads.start();
     }
-    public void init(Logger.Level level, OutputStream output) throws IOException, InterruptedException {
-        Logger.start(level, output);
-        eventLoop.init();
-    }
-    public void open(InetSocketAddress address) throws Exception {
-        connection = new TCPConnection(SocketChannel.open(address));
+    public void open(InetSocketAddress a) throws Exception {
+        var s = SocketChannel.open();
+
+        s.bind(local);
+        s.configureBlocking(false);
+        s.connect(a);
+        TCPConnection connection = new TCPConnection(s);
         connection.setConnectionCallback(this::onConnection);
         connection.setReadCallback(this::onRead);
         connection.setWriteFinishedCallback(this::onWriteFinished);
         connection.setHwmCallback(this::onHwm);
-        connection.register(eventLoop);
+        var e = getE();
+        e.run(() -> connection.register(e));
     }
-    public void start() {
-        eventLoop.start();
-    }
-    public void queueWrite(ByteBuffer buffer) {
-        connection.queueWrite(buffer);
-    }
-    public void queueDisconnect() {
-        connection.queueDisconnect();
+
+    private EventLoop getE() {
+        if (threads.count() > 0) {
+            return threads.get().getEventLoop();
+        } else {
+            return eventLoop;
+        }
     }
     private void onConnection(TCPConnection connection) throws Exception {
         LogLine.begin(Logger.Level.Info).log(connection.toString() + ": " + connection.getState()).end();
         if (connectionCallback != null) {
-            connectionCallback.accept(this, connection);
+            connectionCallback.accept(connection);
         }
     }
     private void onRead(TCPConnection connection) throws Exception {
         if (readCallback != null) {
-            readCallback.accept(this, connection);
+            readCallback.accept(connection);
         }
     }
     private void onWriteFinished(TCPConnection connection) {

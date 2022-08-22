@@ -79,6 +79,13 @@ public class EventLoop {
         bStarted.set(false);
         wakeup();
     }
+    public void run(Runner runner) throws Exception {
+        if (isThread()) {
+            runner.run();
+        } else {
+            queue(runner);
+        }
+    }
     public void queue(Runner runner) {
         runnersLock.lock();
         runners.add(runner);

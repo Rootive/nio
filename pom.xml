@@ -18,6 +18,8 @@
         <module>nio_rpc</module>
         <module>gadgets</module>
         <module>http</module>
+        <module>raft</module>
+        <module>p2p</module>
     </modules>
 
     <properties>

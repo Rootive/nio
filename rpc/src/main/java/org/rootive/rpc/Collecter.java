@@ -2,6 +2,8 @@ package org.rootive.rpc;
 
 import org.rootive.gadget.ByteBufferList;
 
+import java.nio.ByteBuffer;
+
 public class Collecter {
     public enum State {
         Empty, Semi, Done, Error
@@ -14,6 +16,25 @@ public class Collecter {
         buffers.clear();
         state = State.Empty;
         bString = false;
+    }
+    static public ByteBuffer collect(ByteBuffer read) {
+        if (read.remaining() > 0) {
+            boolean bString = false;
+            for (var _i = read.position(); _i < read.limit(); ++_i) {
+                var ch = read.get(_i);
+                if (ch == '"') {
+                    bString = !bString;
+                } else if (ch == '\\') {
+                    ++_i;
+                } else if (!bString && ch == ';') {
+                    ByteBuffer ret = read.duplicate();
+                    ret.limit(_i);
+                    read.position(_i + 1);
+                    return ret;
+                }
+            }
+        }
+        return null;
     }
     public State collect(ByteBufferList read) {
         if (state.compareTo(State.Done) >= 0) {

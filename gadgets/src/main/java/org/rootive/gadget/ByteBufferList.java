@@ -69,6 +69,7 @@ public class ByteBufferList {
         }
         return remaining - ret;
     }
+
     public byte[] toByteArray() {
         ByteBuffer ret = ByteBuffer.allocate(remaining);
         for (var buffer : buffers) {
