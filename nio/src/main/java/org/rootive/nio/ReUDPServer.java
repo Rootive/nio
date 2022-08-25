@@ -47,16 +47,17 @@ public class ReUDPServer implements Handler {
     private final LinkedList<Send> unsent = new LinkedList<>();
     private final LinkedList<Send> unconfirmed = new LinkedList<>(); // BUG Rootive: 链表会是最好的选择吗？
     private final HashMap<SocketAddress, I> received = new HashMap<>();
-    private final Timer retransmission = new Timer();
+    private final Timer retransmission;
 
     private ReadCallback readCallback;
     private Callback dropCallback;
     private Callback confirmedCallback;
 
-    public ReUDPServer(EventLoop eventLoop) {
+    public ReUDPServer(EventLoop eventLoop, Timer retransmission) {
         this.eventLoop = eventLoop;
+        this.retransmission = retransmission;
+        //channel.setOption()
     }
-
     public void setReadCallback(ReadCallback readCallback) {
         this.readCallback = readCallback;
     }
