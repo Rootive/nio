@@ -1,21 +1,21 @@
 package org.rootive.gadget;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ByteChannel;
-import java.nio.channels.SocketChannel;
-import java.util.LinkedList;
 
 public class ByteBufferList {
-    private final LinkedList<ByteBuffer> buffers = new LinkedList<>();
+    private final Linked<ByteBuffer> linked = new Linked<>();
     private int remaining;
 
+    public Linked<ByteBuffer> getLinked() {
+        return linked;
+    }
     public int writeTo(ByteChannel byteChannel) throws IOException {
         int ret = remaining;
-        while (buffers.size() > 0) {
+        while (!linked.isEmpty()) {
             var buffer = removeFirst();
             byteChannel.write(buffer);
             if (buffer.remaining() > 0) {
@@ -26,7 +26,7 @@ public class ByteBufferList {
         return ret - remaining;
     }
     public void writeTo(OutputStream output) throws IOException {
-        while (buffers.size() > 0) {
+        while (!linked.isEmpty()) {
             var buffer = removeFirst();
             try {
                 output.write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
@@ -72,30 +72,31 @@ public class ByteBufferList {
 
     public byte[] toByteArray() {
         ByteBuffer ret = ByteBuffer.allocate(remaining);
-        for (var buffer : buffers) {
-            var duplicate = buffer.duplicate();
-            ret.put(duplicate);
+        var n = linked.head();
+        while (n != null) {
+            ret.put(n.v.duplicate());
+            n = n.right();
         }
         return ret.array();
     }
 
     public void addFirst(ByteBuffer value) {
         remaining += value.remaining();
-        buffers.addFirst(value);
+        linked.addFirst(value);
     }
     public void addLast(ByteBuffer value) {
         remaining += value.remaining();
-        buffers.addLast(value);
+        linked.addLast(value);
     }
     public ByteBuffer removeFirst() {
-        remaining -= buffers.getFirst().remaining();
-        return buffers.removeFirst();
+        remaining -= linked.head().v.remaining();
+        return linked.removeFirst();
     }
-    public int size() {
-        return buffers.size();
+    public boolean isEmpty() {
+        return linked.isEmpty();
     }
     public void clear() {
-        buffers.clear();
+        linked.clear();
         remaining = 0;
     }
     public int totalRemaining() {

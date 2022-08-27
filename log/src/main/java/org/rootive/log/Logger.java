@@ -43,7 +43,7 @@ public class Logger {
         do {
             buffersLock.lock();
             try {
-                while (available.size() == 0) {
+                while (available.isEmpty()) {
                     buffersCondition.await();
                 }
             } catch (InterruptedException e) {
@@ -53,7 +53,7 @@ public class Logger {
             available = fulled;
             buffersLock.unlock();
             fulled = temporary;
-            while (fulled.size() > 0) {
+            while (!fulled.isEmpty()) {
                 try {
                     fulled.writeTo(output);
                 } catch (IOException e) {
@@ -67,7 +67,7 @@ public class Logger {
             }
         } while (bStarted.get());
         buffersLock.lock();
-        while (available.size() > 0) {
+        while (!available.isEmpty()) {
             try {
                 available.writeTo(output);
             } catch (IOException e) {

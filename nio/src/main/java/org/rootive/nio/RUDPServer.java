@@ -1,6 +1,7 @@
 package org.rootive.nio;
 
 import org.rootive.gadget.Linked;
+import org.rootive.gadget.LoopThreadPool;
 import org.rootive.log.LogLine;
 import org.rootive.log.Logger;
 
@@ -10,13 +11,16 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Timer;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
 
 public class RUDPServer implements Handler {
-    @FunctionalInterface
-    public interface ReadCallback {
-        void invoke(RUDPConnection c, Linked<RUDPConnection.Datagram> l) throws Exception;
+    @FunctionalInterface public interface ReadCallback {
+        void invoke(RUDPConnection c, Linked<ByteBuffer> l) throws Exception;
+    }
+    @FunctionalInterface public interface Callback {
+        void invoke(RUDPConnection c) throws Exception;
     }
     static public class Send {
         public SocketAddress a;
@@ -28,23 +32,32 @@ public class RUDPServer implements Handler {
     }
 
     private ReadCallback readCallback;
+    private Callback stateCallback;
 
     private DatagramChannel channel;
     private SelectionKey selectionKey;
-    private final Timer timer;
+    private final ScheduledThreadPoolExecutor timers;
     private final EventLoop eventLoop;
-    private final EventLoopThreadPool threads;
-    private final LinkedList<Send> unsent = new LinkedList<>();
+    private final LoopThreadPool threads;
+    private final Linked<Send> unsent = new Linked<>();
     private final HashMap<SocketAddress, RUDPConnection> cs = new HashMap<>();
+    private final ReentrantReadWriteLock csLock = new ReentrantReadWriteLock();
+    private Function<RUDPConnection, Object> connectionContext = (c) -> null;
 
-    public RUDPServer(Timer timer, EventLoop eventLoop, int threadsCount) {
-        this.timer = timer;
+    public RUDPServer(ScheduledThreadPoolExecutor timers, EventLoop eventLoop, int threadsCount) {
+        this.timers = timers;
         this.eventLoop = eventLoop;
-        threads = new EventLoopThreadPool(threadsCount);
+        threads = new LoopThreadPool(threadsCount);
     }
 
     public void setReadCallback(ReadCallback readCallback) {
         this.readCallback = readCallback;
+    }
+    public void setStateCallback(Callback stateCallback) {
+        this.stateCallback = stateCallback;
+    }
+    public void setConnectionContext(Function<RUDPConnection, Object> connectionContext) {
+        this.connectionContext = connectionContext;
     }
 
     public void init(InetSocketAddress local) throws Exception {
@@ -53,6 +66,19 @@ public class RUDPServer implements Handler {
         channel.configureBlocking(false);
         channel.bind(local);
         selectionKey = eventLoop.add(channel, SelectionKey.OP_READ, this);
+    }
+    public RUDPConnection get(SocketAddress remote) throws Exception {
+        csLock.readLock().lock();
+        var ret = cs.get(remote);
+        csLock.readLock().unlock();
+        if (ret == null) {
+            ret = newConnection(remote);
+            ret.init();
+            csLock.writeLock().lock();
+            cs.put(remote, ret);
+            csLock.writeLock().unlock();
+        }
+        return ret;
     }
 
     @Override
@@ -69,13 +95,14 @@ public class RUDPServer implements Handler {
             var a = channel.receive(b);
             if (a != null) {
                 b.flip();
+                csLock.readLock().lock();
                 var c = cs.get(a);
+                csLock.readLock().unlock();
                 if (c == null) {
-                    c = new RUDPConnection(a, getE(), this::transmission, timer);
-                    c.setStateCallback(this::onState);
-                    c.setFlushedCallback(this::onFlushed);
-                    c.setReadCallback(this::onRead);
+                    c = newConnection(a);
+                    csLock.writeLock().lock();
                     cs.put(a, c);
+                    csLock.writeLock().unlock();
                 }
                 c.handleReceive(b);
             } else {
@@ -84,7 +111,7 @@ public class RUDPServer implements Handler {
         }
     }
     private void handleWrite() throws Exception {
-        while (unsent.size() > 0) {
+        while (!unsent.isEmpty()) {
             var s = unsent.removeFirst();
             channel.send(s.b, s.a);
             if (s.b.remaining() > 0) {
@@ -92,32 +119,28 @@ public class RUDPServer implements Handler {
                 break;
             }
         }
-        if (unsent.size() == 0) {
+        if (unsent.isEmpty()) {
             selectionKey.interestOpsAnd(~SelectionKey.OP_WRITE);
-        }
-    }
-    private EventLoop getE() {
-        if (threads.count() > 0) {
-            return threads.get().getEventLoop();
-        } else {
-            return eventLoop;
         }
     }
     private void onFlushed(RUDPConnection c) {
         LogLine.begin(Logger.Level.Info).log(c + ": flushed").end();
     }
-    private void onState(RUDPConnection c) {
+    private void onState(RUDPConnection c) throws Exception {
         switch (c.getState()) {
-            case Connected -> {
-                LogLine.begin(Logger.Level.Info).log(c + ": connected").end();
-            }
+            case Connected -> LogLine.begin(Logger.Level.Info).log(c + ": connected").end();
             case Disconnected -> {
+                csLock.writeLock().lock();
                 cs.remove(c.getRemote());
+                csLock.writeLock().unlock();
                 LogLine.begin(Logger.Level.Info).log(c + ": disconnected").end();
             }
         }
+        if (stateCallback != null) {
+            stateCallback.invoke(c);
+        }
     }
-    private void onRead(RUDPConnection c, Linked<RUDPConnection.Datagram> l) throws Exception {
+    private void onRead(RUDPConnection c, Linked<ByteBuffer> l) throws Exception {
         if (readCallback != null) {
             readCallback.invoke(c, l);
         }
@@ -135,5 +158,13 @@ public class RUDPServer implements Handler {
                 }
             }
         });
+    }
+    private RUDPConnection newConnection(SocketAddress a) {
+        RUDPConnection ret = new RUDPConnection(a, threads.get().getLoop(), this::transmission, timers);
+        ret.setStateCallback(this::onState);
+        ret.setFlushedCallback(this::onFlushed);
+        ret.setReadCallback(this::onRead);
+        ret.context = connectionContext.apply(ret);
+        return ret;
     }
 }

@@ -11,7 +11,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class EventLoop {
     @FunctionalInterface
-    interface Runner {
+    public interface Runner {
         void run() throws Exception;
     }
 

@@ -1,7 +1,5 @@
 package org.rootive.rpc;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 
@@ -9,7 +7,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ServerStub {
-    static final private String nullString = "null";
 
     private final ServerStub parent;
     private final HashMap<String, Namespace> map = new HashMap<>();
@@ -30,6 +27,12 @@ public class ServerStub {
             namespace = new Namespace(signature, obj);
             register(namespace);
         }
+    }
+    public void register(Function function) {
+        register(new Signature(function), function);
+    }
+    public void register(String identifier, Object obj) {
+        register(new Signature(obj.getClass(), identifier), obj);
     }
     public void unregister(Class<?> cls) {
         map.remove(Signature.namespaceStringOf(cls));
@@ -62,7 +65,7 @@ public class ServerStub {
         }
         return ret;
     }
-    public Object invoke(Parser p, Object context) throws JsonProcessingException, InvocationTargetException, IllegalAccessException, BadParametersException, BadReferenceException {
+    private Object invoke(Parser p, Object context) throws JsonProcessingException, InvocationTargetException, IllegalAccessException, BadParametersException, BadReferenceException {
         switch (p.getType()) {
             case Literal -> {
                 if (context instanceof Class) {
@@ -97,7 +100,7 @@ public class ServerStub {
             default -> throw new BadParametersException("unrecognized signature: " + p.getLiteral());
         }
     }
-    public byte[] invoke(Parser p) throws IOException {
+    public Result invoke(Parser p) {
         Result result = new Result();
         ObjectMapper json = new ObjectMapper();
         Object res = null;
@@ -128,9 +131,6 @@ public class ServerStub {
                 result.setMsg(e.getMessage());
             }
         }
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(128);
-        new ObjectMapper().writeValue(outputStream, result);
-        outputStream.write(';');
-        return outputStream.toByteArray();
+        return result;
     }
 }

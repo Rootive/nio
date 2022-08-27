@@ -1,28 +1,27 @@
 package org.rootive.nio;
 
 import org.rootive.gadget.Linked;
+import org.rootive.gadget.Loop;
 import org.rootive.log.LogLine;
 import org.rootive.log.Logger;
 
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Objects;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class RUDPConnection {
-    @FunctionalInterface
-    public interface Callback {
+    @FunctionalInterface public interface Callback {
         void invoke(RUDPConnection c) throws Exception;
     }
-    @FunctionalInterface
-    public interface ReadCallback {
-        void invoke(RUDPConnection c, Linked<Datagram> l) throws Exception;
+    @FunctionalInterface public interface ReadCallback {
+        void invoke(RUDPConnection c, Linked<ByteBuffer> l) throws Exception;
     }
-    @FunctionalInterface
-    public interface Transmission {
+    @FunctionalInterface public interface Transmission {
         void accept(SocketAddress a, ByteBuffer b) throws Exception;
     }
 
@@ -34,9 +33,6 @@ public class RUDPConnection {
             this.c = c;
             this.b = b;
         }
-        public Datagram(int c) {
-            this.c = c;
-        }
     }
 
     public enum State {
@@ -46,42 +42,45 @@ public class RUDPConnection {
     public static final int MTU = 548;
     private static final int checkSize = 4;
     private static final int countSize = 4;
-    private static final int headerSize = checkSize + countSize;
+    public static final int headerSize = checkSize + countSize;
     static private final int missLine = 2;
     static private final int heartbeatPeriod = 8000;
-    static private final int pardonPeriod = 3000;
+    static private final int pardonPeriod = 2000;
 
     private final SocketAddress remote;
-    private final EventLoop eventLoop;
+    private final Loop loop;
 
     private final Transmission transmission;
-    private Callback stateCallback;
     private ReadCallback readCallback;
+    private Callback stateCallback;
     private Callback flushedCallback;
 
-    private final Timer timer;
     private int missCount;
-    private TimerTask miss;
-    private TimerTask heartbeat;
-    private TimerTask pardon;
+    private final ScheduledThreadPoolExecutor timers;
+    private ScheduledFuture<?> missFuture;
+    private ScheduledFuture<?> heartbeatFuture;
+    private ScheduledFuture<?> pardonFuture;
 
     private State state = State.Disconnected;
-    private boolean bFlushing;
     private final ReentrantReadWriteLock stateLock = new ReentrantReadWriteLock();
     private final Lock stateReadLock = stateLock.readLock();
     private final Lock stateWriteLock = stateLock.writeLock();
+    private boolean bFlushing;
     private int check;
     private int sentCount;
 
     private Linked<Datagram> unsent = new Linked<>();
-    private Linked<Datagram> received = new Linked<>();
+    private Linked<ByteBuffer> received = new Linked<>();
     private final Linked<Datagram> unconfirmed = new Linked<>();
+    private int receivedCount;
 
-    public RUDPConnection(SocketAddress remote, EventLoop eventLoop, Transmission transmission, Timer timer) {
+    public Object context;
+
+    public RUDPConnection(SocketAddress remote, Loop loop, Transmission transmission, ScheduledThreadPoolExecutor timers) {
         this.remote = remote;
-        this.eventLoop = eventLoop;
+        this.loop = loop;
         this.transmission = transmission;
-        this.timer = timer;
+        this.timers = timers;
     }
 
     public SocketAddress getRemote() {
@@ -106,13 +105,13 @@ public class RUDPConnection {
         return buffer.slice(headerSize, MTU - headerSize);
     }
 
-    private void _connect() {
+    private void _init() {
         if (getState() == State.Disconnected) {
             clear();
             setState(State.Connecting);
-            miss();
-            check = (int) System.currentTimeMillis();
-            heartbeat(0);
+            startMiss();
+            check = (int) System.currentTimeMillis() & 0x1111111;
+            startHeartbeat(0);
         }
     }
     private void _flush() throws Exception {
@@ -132,24 +131,25 @@ public class RUDPConnection {
             _b.reset();
             unsent.addLast(new Datagram(sentCount, _b));
             handleUnsent();
-
         }
     }
     private void _handleReceive(ByteBuffer b) throws Exception {
-        if (b.remaining() > checkSize) {
-            miss();
+        if (b.remaining() >= checkSize) {
+            startMiss();
             switch (getState()) {
                 case Connecting -> {
                     setState(State.Connected);
                     if (stateCallback != null) {
                         stateCallback.invoke(this);
                     }
-                    handleUnsent();
+                    if (!unsent.isEmpty()) {
+                        handleUnsent();
+                    }
                 }
                 case Disconnected -> {
                     clear();
                     setState(State.Connected);
-                    heartbeat(0);
+                    startHeartbeat(0);
                     if (stateCallback != null) {
                         stateCallback.invoke(this);
                     }
@@ -162,89 +162,101 @@ public class RUDPConnection {
                 check = c;
             }
             if (c >= check) {
-                if (b.remaining() > countSize) {
+                if (b.remaining() >= countSize) {
                     var count = b.getInt();
                     if (b.remaining() > 0) {
                         handleMessage(count, b);
-                    } else {
+                    } else if (!unconfirmed.isEmpty()) {
                         handleConfirm(count);
                     }
                 }
             } else {
-                heartbeat(0);
+                startHeartbeat(0);
             }
         }
     }
 
-    public void connect() throws Exception {
-        eventLoop.run(this::_connect);
+    public void init() throws Exception {
+        loop.run(this::_init);
     }
     public void flush() throws Exception {
-        eventLoop.run(this::_flush);
+        loop.run(this::_flush);
     }
     public void message(ByteBuffer b) throws Exception {
-        eventLoop.run(() -> _message(b));
-    }
-    public void handleReceive(ByteBuffer b) throws Exception {
-        eventLoop.run(() -> _handleReceive(b));
+        loop.run(() -> _message(b));
     }
 
+    void handleReceive(ByteBuffer b) throws Exception {
+        loop.run(() -> _handleReceive(b));
+    }
     private void handleMessage(int c, ByteBuffer b) throws Exception {
         confirm(c);
-        if (c >= received.head().v.c) {
-            var tar = received.head().find((d) -> d.c == c);
-            if (tar != null) {
-                tar.v.b = b;
-
-                Linked<Datagram> ready;
-                var n = received.head().find((d) -> d.b == null);
-                if (n == null) {
-                    ready = received;
-                    received = new Linked<>();
-                    received.addLast(new Datagram(ready.tail().v.c + 1));
-                } else {
-                    ready = received.lSplit(n);
-                }
-                if (!ready.isEmpty() && readCallback != null) {
-                    readCallback.invoke(this, ready);
-                }
-            } else {
-                for (var _i = received.tail().v.c + 1; _i <= c; ++_i) {
-                    received.addLast(new Datagram(_i));
-                }
-                received.tail().v.b = b;
+        var n = received.head();
+        var _i = receivedCount + 1;
+        while (_i < c) {
+            if (n == null) {
+                received.addLast(null);
+                n = received.tail();
             }
+
+            ++_i;
+            n = n.right();
+        }
+        if (n == null) {
+            received.addLast(b);
+        } else {
+            n.v = b;
+        }
+
+        n = received.head();
+        while (n != null) {
+            if (n.v == null) {
+                break;
+            }
+
+            ++receivedCount;
+            n = n.right();
+        }
+        Linked<ByteBuffer> ready;
+        if (n == null) {
+            ready = received;
+            received = new Linked<>();
+        } else {
+            ready = received.lSplit(n);
+        }
+
+        if (!ready.isEmpty() && readCallback != null) {
+            readCallback.invoke(this, ready);
         }
     }
     private void handleConfirm(int c) throws Exception {
         var n = unconfirmed.head();
-        if (n != null && c >= n.v.c) {
-            do {
-                if (c == n.v.c) {
-                    unconfirmed.split(n);
-                    if (unconfirmed.isEmpty()) {
-                        bFlushing = false;
-                        if (pardon != null) {
-                            pardon.cancel();
-                        }
-                        if (flushedCallback != null) {
-                            flushedCallback.invoke(this);
-                        }
-                        if (!unsent.isEmpty()) {
-                            handleUnsent();
-                        }
+        while (n != null) {
+            if (c == n.v.c) {
+                unconfirmed.split(n);
+                LogLine.begin(Logger.Level.Debug).log("received confirm: " + c).end();
+                if (unconfirmed.isEmpty()) {
+                    bFlushing = false;
+                    if (pardonFuture != null) {
+                        pardonFuture.cancel(false);
                     }
-                    break;
-                } else if (c < n.v.c) {
-                    break;
+                    if (flushedCallback != null) {
+                        flushedCallback.invoke(this);
+                    }
+                    if (!unsent.isEmpty()) {
+                        handleUnsent();
+                    }
                 }
-                n = n.right();
-            } while (n != null);
+                break;
+            } else if (c < n.v.c) {
+                break;
+            }
+            n = n.right();
         }
     }
 
     private void handleUnsent() throws Exception {
-        if (bFlushing) {
+        if (bFlushing || getState() != State.Connected) {
             return;
         }
         var n = unsent.head().find(Objects::isNull);
@@ -264,14 +276,13 @@ public class RUDPConnection {
             } while (rn != null);
             unconfirmed.link(ready);
 
-            heartbeat(heartbeatPeriod);
+            startHeartbeat(heartbeatPeriod);
         }
 
         if (!unsent.isEmpty() && unsent.head().v == null && !unconfirmed.isEmpty()) {
             unsent.removeFirst();
             bFlushing = true;
-            pardon = newPardon();
-            timer.schedule(pardon, 0, pardonPeriod);
+            startPardon();
         }
 
     }
@@ -282,33 +293,78 @@ public class RUDPConnection {
         b.flip();
 
         transmission.accept(remote, b);
-        heartbeat(heartbeatPeriod);
+        startHeartbeat(heartbeatPeriod);
     }
-    private void heartbeat(long delay) {
-        if (heartbeat != null) {
-            heartbeat.cancel();
+    private void startHeartbeat(int delay) {
+        if (heartbeatFuture != null) {
+            heartbeatFuture.cancel(false);
         }
-        heartbeat = newHeartbeat();
-        timer.schedule(heartbeat, delay, heartbeatPeriod);
+        heartbeatFuture = timers.scheduleAtFixedRate(() -> {
+
+            ByteBuffer b = ByteBuffer.allocate(checkSize);
+            b.putInt(check);
+            b.flip();
+            LogLine.begin(Logger.Level.Debug).log("send heartbeat").end();
+            loop.queue(() -> transmission.accept(remote, b));
+
+        }, delay, heartbeatPeriod, TimeUnit.MILLISECONDS);
     }
-    private void miss() {
-        if (miss != null) {
-            miss.cancel();
+    private void startMiss() {
+        if (missFuture != null) {
+            missFuture.cancel(false);
         }
         missCount = 0;
-        miss = newMiss();
-        timer.schedule(miss, heartbeatPeriod, heartbeatPeriod);
+        missFuture = timers.scheduleAtFixedRate(() -> {
+
+            if (missCount == missLine) {
+                setState(State.Disconnected);
+                loop.queue(() -> {
+                    if (missFuture != null) {
+                        missFuture.cancel(false);
+                    }
+                    if (heartbeatFuture != null) {
+                        heartbeatFuture.cancel(false);
+                    }
+                    if (pardonFuture != null) {
+                        pardonFuture.cancel(false);
+                    }
+                    if (stateCallback != null) {
+                        stateCallback.invoke(RUDPConnection.this);
+                    }
+                });
+            }
+            ++missCount;
+            LogLine.begin(Logger.Level.Debug).log("miss " + missCount).end();
+
+        }, heartbeatPeriod, heartbeatPeriod, TimeUnit.MILLISECONDS);
     }
+    private void startPardon() {
+        if (pardonFuture != null) {
+            pardonFuture.cancel(false);
+        }
+        pardonFuture = timers.scheduleAtFixedRate(() -> {
+
+            LogLine.begin(Logger.Level.Debug).log("send pardon").end();
+            loop.queue(() -> {
+                var n = unconfirmed.head();
+                while (n != null) {
+                    transmission.accept(remote, n.v.b.duplicate());
+                    n = n.right();
+                }
+            });
+
+        }, pardonPeriod, pardonPeriod, TimeUnit.MILLISECONDS);
+    }
+
     private void clear() {
         check = 0;
         sentCount = 0;
         unsent.clear();
         received.clear();
-        received.addLast(new Datagram(1));
+        receivedCount = 0;
         unconfirmed.clear();
 
     }
-
     public State getState() {
         stateReadLock.lock();
         var ret = state;
@@ -319,58 +375,6 @@ public class RUDPConnection {
         stateWriteLock.lock();
         state = v;
         stateWriteLock.unlock();
-    }
-
-    private TimerTask newMiss() {
-        return new TimerTask() {
-            @Override
-            public void run() {
-                if (missCount == missLine) {
-                    timer.purge();
-                    setState(State.Disconnected);
-                    eventLoop.queue(() -> {
-                        if (miss != null) {
-                            miss.cancel();
-                        }
-                        if (heartbeat != null) {
-                            heartbeat.cancel();
-                        }
-                        if (pardon != null) {
-                            pardon.cancel();
-                        }
-                        if (stateCallback != null) {
-                            stateCallback.invoke(RUDPConnection.this);
-                        }
-                    });
-                }
-                ++missCount;
-            }
-        };
-    }
-    private TimerTask newHeartbeat() {
-        return new TimerTask() {
-            @Override
-            public void run() {
-                ByteBuffer b = ByteBuffer.allocate(checkSize);
-                b.putInt(check);
-                b.flip();
-                eventLoop.queue(() -> transmission.accept(remote, b));
-            }
-        };
-    }
-    private TimerTask newPardon() {
-        return new TimerTask() {
-            @Override
-            public void run() {
-                eventLoop.queue(() -> {
-                    var n = unconfirmed.head();
-                    do {
-                        transmission.accept(remote, n.v.b.duplicate());
-                        n = n.right();
-                    } while (n != null);
-                });
-            }
-        };
     }
 
 }

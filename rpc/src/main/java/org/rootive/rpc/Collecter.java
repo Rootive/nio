@@ -1,12 +1,13 @@
 package org.rootive.rpc;
 
 import org.rootive.gadget.ByteBufferList;
+import org.rootive.gadget.Linked;
 
 import java.nio.ByteBuffer;
 
 public class Collecter {
     public enum State {
-        Empty, Semi, Done, Error
+        Empty, Semi, Done
     }
     private final ByteBufferList buffers = new ByteBufferList();
     private State state = State.Empty;
@@ -36,11 +37,11 @@ public class Collecter {
         }
         return null;
     }
-    public State collect(ByteBufferList read) {
+    public State collect(Linked<ByteBuffer> read) {
         if (state.compareTo(State.Done) >= 0) {
             return state;
         }
-        while (read.size() > 0 && state.compareTo(State.Done) < 0) {
+        while (!read.isEmpty() && state.compareTo(State.Done) < 0) {
             boolean bContinue = true;
             var buffer = read.removeFirst();
             var l = buffer.position();

@@ -14,6 +14,9 @@ public class Invoker {
 
     Invoker(Reference reference, Object obj, Object...args) throws IOException, NoSuchFieldException, IllegalAccessException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        for (var _i = 0; _i < ClientStub.headerSize; ++_i) {
+            outputStream.write(0);
+        }
         var referenceData = reference.getData();
         outputStream.write(referenceData, 0, referenceData.length);
         outputStream.write('(');
@@ -35,7 +38,7 @@ public class Invoker {
         return new String(data);
     }
 
-    public Invoker invoke(InvokerTransmission t) throws Exception {
+    public Invoker invoke(Transmission t) throws Exception {
         t.send(data, this);
         return this;
     }
@@ -63,6 +66,8 @@ public class Invoker {
         } else if (status == Result.Status.BAD_PARAMETERS) {
             throw new BadParametersException(result.getMsg());
         } else if (status == Result.Status.BAD_REFERENCE) {
+            throw new BadReferenceException(result.getMsg());
+        } else if (status == Result.Status.BAD_TRANSMISSION) {
             throw new BadReferenceException(result.getMsg());
         } else {
             return result.getData();

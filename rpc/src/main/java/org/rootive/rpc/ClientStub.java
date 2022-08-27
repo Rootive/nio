@@ -10,11 +10,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
 class ClientInvocationHandler implements InvocationHandler {
-    private final InvokerTransmission t;
+    private final Transmission t;
     private final Reference obj;
     private final Class<?> aClass;
 
-    ClientInvocationHandler(InvokerTransmission t, Reference obj, Class<?> aClass) {
+    ClientInvocationHandler(Transmission t, Reference obj, Class<?> aClass) {
         this.t = t;
         this.obj = obj;
         this.aClass = aClass;
@@ -31,6 +31,7 @@ class ClientInvocationHandler implements InvocationHandler {
 
 public class ClientStub {
     static private Field h;
+    static public final int headerSize = 8;
 
     static public Reference sig(Signature s) {
         return new Reference(s);
@@ -45,7 +46,7 @@ public class ClientStub {
         return func(new Function(method.getDeclaringClass(), method));
     }
 
-    static public Object proxyOfInterface(InvokerTransmission t, Class<?> cls, Reference reference) {
+    static public Object proxyOfInterface(Transmission t, Class<?> cls, Reference reference) {
         var handler = new ClientInvocationHandler(t, reference, cls);
         return Proxy.newProxyInstance(cls.getClassLoader(), cls.getInterfaces(), handler);
     }

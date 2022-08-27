@@ -12,10 +12,18 @@ public class Result {
         static final public int BAD_PARAMETERS = 702;
         static final public int BAD_REFERENCE = 703;
 
+        static final public int BAD_TRANSMISSION = 800;
     }
     private int stat;
     private String msg;
     private byte[] data;
+
+    public Result() { }
+
+    public Result(int stat, String msg) {
+        this.stat = stat;
+        this.msg = msg;
+    }
 
     public int getStat() {
         return stat;

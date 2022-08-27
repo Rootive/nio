@@ -3,72 +3,19 @@ import org.rootive.log.Logger;
 import org.rootive.nio.EventLoopThread;
 import org.rootive.nio.RUDPConnection;
 import org.rootive.nio.RUDPServer;
-import org.rootive.nio.ReUDPServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 import java.util.Timer;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 public class UDP {
-    ReUDPServer as;
-    ReUDPServer bs;
-
     static String bufferToString(ByteBuffer b) {
         return new String(b.array(), b.position() + b.arrayOffset(), b.remaining());
-    }
-    void onRead(SocketAddress a, ByteBuffer b) {
-        System.out.println(a + ": " + bufferToString(b));
-    }
-    void onDrop(ReUDPServer.Send s) {
-        var i = s.b.getInt();
-        System.out.println("drop: " + i + " " + bufferToString(s.b));
-    }
-    void onConfirm(ReUDPServer.Send s) {
-        var i = s.b.getInt();
-        System.out.println("confirm: " + i + " " + bufferToString(s.b));
-    }
-
-    @Test
-    public void a() throws Exception {
-        EventLoopThread t = new EventLoopThread();
-        t.setThreadInitFunction((e) -> {
-            as = new ReUDPServer(e, new Timer());
-            as.setConfirmedCallback(this::onConfirm);
-            as.setDropCallback(this::onDrop);
-            as.setReadCallback(this::onRead);
-            as.init(new InetSocketAddress(45555));
-        });
-        t.start();
-
-        ByteBuffer b = ReUDPServer.newBuffer();
-        b.put("hello".getBytes());
-        b.flip();
-        as.write(new InetSocketAddress("127.0.0.1", 45556), b.duplicate());
-        as.write(new InetSocketAddress("127.0.0.1", 45556), b.duplicate());
-
-        t.join();
-    }
-
-    @Test
-    public void b() throws Exception {
-        EventLoopThread t = new EventLoopThread();
-        t.setThreadInitFunction((e) -> {
-            bs = new ReUDPServer(e, new Timer());
-            bs.setConfirmedCallback(this::onConfirm);
-            bs.setDropCallback(this::onDrop);
-            bs.setReadCallback(this::onRead);
-            bs.init(new InetSocketAddress(45556));
-        });
-        t.start();
-        t.join();
     }
 
     RUDPServer xs;
@@ -78,13 +25,45 @@ public class UDP {
         Logger.start(Logger.Level.All, System.out);
         EventLoopThread t = new EventLoopThread();
         t.setThreadInitFunction((e) -> {
-            xs = new RUDPServer(new Timer(), e, 0);
+            xs = new RUDPServer(new ScheduledThreadPoolExecutor(1), e, 2);
             xs.setReadCallback((c, l) -> {
                 var d = l.head();
                 do {
-                    System.out.println(c + ": " + bufferToString(d.v.b));
+                    System.out.println(c + ": " + bufferToString(d.v));
                     d = d.right();
                 } while (d != null);
+            });
+            xs.setStateCallback((c) -> {
+                if (c.getState() == RUDPConnection.State.Connected) {
+                    Thread th = new Thread(() -> {
+                        try {
+                            ByteBuffer b = RUDPConnection.newByteBuffer();
+                            b.put("hello".getBytes());
+                            b.flip();
+                            c.message(b);
+
+                            ByteBuffer d = RUDPConnection.newByteBuffer();
+                            d.put(", ".getBytes());
+                            d.flip();
+                            c.message(d);
+                            c.flush();
+
+                            ByteBuffer f = RUDPConnection.newByteBuffer();
+                            f.put("world".getBytes());
+                            f.flip();
+                            c.message(f);
+
+                            ByteBuffer g = RUDPConnection.newByteBuffer();
+                            g.put("! ".getBytes());
+                            g.flip();
+                            c.message(g);
+
+                        } catch (Exception ep) {
+                            ep.printStackTrace();
+                        }
+                    });
+                    th.start();
+                }
             });
             xs.init(new InetSocketAddress(45555));
         });
@@ -94,55 +73,70 @@ public class UDP {
 
     @Test
     public void y() throws Exception {
+        Logger.start(Logger.Level.All, System.out);
         EventLoopThread t = new EventLoopThread();
+
         t.setThreadInitFunction((e) -> {
-            ys = new RUDPServer(new Timer(), e, 0);
+            ys = new RUDPServer(new ScheduledThreadPoolExecutor(1), e, 2);
             ys.setReadCallback((c, l) -> {
                 var d = l.head();
                 do {
-                    System.out.println(c + ": " + bufferToString(d.v.b));
+                    System.out.println(c + ": " + bufferToString(d.v));
                     d = d.right();
                 } while (d != null);
             });
             ys.init(new InetSocketAddress(45556));
         });
         t.start();
+        t.getEventLoop().run(() -> ys.get(new InetSocketAddress("127.0.0.1", 45555)));
         t.join();
     }
 
     public static void main(String[] args) throws IOException {
-        var remote = new InetSocketAddress("127.0.0.1", 45555);
         var local = new InetSocketAddress(45557);
+        var remote = new InetSocketAddress("127.0.0.1", 45555);
         DatagramChannel c = DatagramChannel.open();
         c.bind(local);
         c.connect(remote);
-        var th = new Thread(() -> {
+        new Thread(() -> {
             try {
-
-                ByteBuffer b = ByteBuffer.allocate(512);
-                while (c.read(b) > 0) {
-                    b.flip();
-                    System.out.println("read: " + bufferToString(b));
+                ByteBuffer b = ByteBuffer.allocate(RUDPConnection.MTU);
+                while (true) {
                     b.clear();
+                    c.read(b);
+                    b.flip();
+                    if (b.remaining() <= 0) {
+                        continue;
+                    }
+                    String s = "read: ";
+                    s += b.getInt();
+                    if (b.remaining() > 0) {
+                        s += " ";
+                        s += b.getInt();
+                    }
+                    if (b.remaining() > 0) {
+                        s += " ";
+                        s += bufferToString(b);
+                    }
+                    System.out.println(s);
                 }
-
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        });
-        th.start();
-
+        }).start();
+        ByteBuffer b = ByteBuffer.allocate(RUDPConnection.MTU);
         Scanner in = new Scanner(System.in);
-        ByteBuffer b = ByteBuffer.allocate(512);
-
         while (true) {
-            b.putInt(1);
+            b.clear();
+            b.putInt(2);
             b.putInt(in.nextInt());
-            b.put(in.next().getBytes());
+            var s = in.next();
+            if (!s.equals(";")) {
+                b.put(s.getBytes());
+            }
             b.flip();
             c.write(b);
-            b.clear();
         }
-
     }
+
 }
