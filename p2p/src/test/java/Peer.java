@@ -1,10 +1,11 @@
 import org.junit.Test;
 import org.rootive.log.Logger;
 import org.rootive.nio.EventLoopThread;
-import org.rootive.nio.RUDPConnection;
 import org.rootive.rpc.ClientStub;
 import org.rootive.rpc.Function;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 
 public class Peer {
@@ -71,6 +72,9 @@ public class Peer {
         System.out.println(new String(invoker.ret()));
 
         Thread.sleep(5000);
+        var ret = ClientStub.func(f).arg(ClientStub.sig(Peer.class, "peer")).invoke(yp.get(remote)).ret();
+
+        System.out.println(new String(ret));
 
         et.join();
     }

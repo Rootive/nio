@@ -2,6 +2,11 @@ package org.rootive.nio;
 
 import org.rootive.gadget.Linked;
 import org.rootive.gadget.LoopThreadPool;
+<<<<<<< HEAD
+=======
+import org.rootive.log.LogLine;
+import org.rootive.log.Logger;
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -10,6 +15,10 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.HashMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+<<<<<<< HEAD
+=======
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
 import java.util.function.Function;
 
 public class RUDPServer implements Handler {
@@ -18,9 +27,12 @@ public class RUDPServer implements Handler {
     }
     @FunctionalInterface public interface Callback {
         void invoke(RUDPConnection c) throws Exception;
+<<<<<<< HEAD
     }
     @FunctionalInterface public interface Runner {
         void run(RUDPConnection c) throws Exception;
+=======
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
     }
     static public class Send {
         public SocketAddress a;
@@ -32,7 +44,11 @@ public class RUDPServer implements Handler {
     }
 
     private ReadCallback readCallback;
+<<<<<<< HEAD
     private Callback disconnectCallback;
+=======
+    private Callback stateCallback;
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
 
     private DatagramChannel channel;
     private SelectionKey selectionKey;
@@ -41,6 +57,10 @@ public class RUDPServer implements Handler {
     private final LoopThreadPool threads;
     private final Linked<Send> unsent = new Linked<>();
     private final HashMap<SocketAddress, RUDPConnection> cs = new HashMap<>();
+<<<<<<< HEAD
+=======
+    private final ReentrantReadWriteLock csLock = new ReentrantReadWriteLock();
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
     private Function<RUDPConnection, Object> connectionContext = (c) -> null;
 
     public RUDPServer(ScheduledThreadPoolExecutor timers, EventLoop eventLoop, int threadsCount) {
@@ -55,6 +75,12 @@ public class RUDPServer implements Handler {
     public void setReadCallback(ReadCallback readCallback) {
         this.readCallback = readCallback;
     }
+<<<<<<< HEAD
+=======
+    public void setStateCallback(Callback stateCallback) {
+        this.stateCallback = stateCallback;
+    }
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
     public void setConnectionContext(Function<RUDPConnection, Object> connectionContext) {
         this.connectionContext = connectionContext;
     }
@@ -65,6 +91,19 @@ public class RUDPServer implements Handler {
         channel.configureBlocking(false);
         channel.bind(local);
         selectionKey = eventLoop.add(channel, SelectionKey.OP_READ, this);
+    }
+    public RUDPConnection get(SocketAddress remote) throws Exception {
+        csLock.readLock().lock();
+        var ret = cs.get(remote);
+        csLock.readLock().unlock();
+        if (ret == null) {
+            ret = newConnection(remote);
+            ret.init();
+            csLock.writeLock().lock();
+            cs.put(remote, ret);
+            csLock.writeLock().unlock();
+        }
+        return ret;
     }
 
     public void connect(SocketAddress remote) throws Exception {
@@ -119,10 +158,17 @@ public class RUDPServer implements Handler {
             var a = channel.receive(b);
             if (a != null) {
                 b.flip();
+                csLock.readLock().lock();
                 var c = cs.get(a);
+                csLock.readLock().unlock();
                 if (c == null) {
                     c = newConnection(a);
+<<<<<<< HEAD
+=======
+                    csLock.writeLock().lock();
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
                     cs.put(a, c);
+                    csLock.writeLock().unlock();
                 }
                 c.handleReceive(b);
             } else {
@@ -143,10 +189,29 @@ public class RUDPServer implements Handler {
             selectionKey.interestOpsAnd(~SelectionKey.OP_WRITE);
         }
     }
+<<<<<<< HEAD
 
     private void onDisconnect(RUDPConnection c) throws Exception {
         eventLoop.run(() -> cs.remove(c.getRemote()));
         disconnectCallback.invoke(c);
+=======
+    private void onFlushed(RUDPConnection c) {
+        LogLine.begin(Logger.Level.Info).log(c + ": flushed").end();
+    }
+    private void onState(RUDPConnection c) throws Exception {
+        switch (c.getState()) {
+            case Connected -> LogLine.begin(Logger.Level.Info).log(c + ": connected").end();
+            case Disconnected -> {
+                csLock.writeLock().lock();
+                cs.remove(c.getRemote());
+                csLock.writeLock().unlock();
+                LogLine.begin(Logger.Level.Info).log(c + ": disconnected").end();
+            }
+        }
+        if (stateCallback != null) {
+            stateCallback.invoke(c);
+        }
+>>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
     }
     private void onRead(RUDPConnection c, Linked<ByteBuffer> l) throws Exception {
         if (readCallback != null) {
@@ -166,5 +231,13 @@ public class RUDPServer implements Handler {
                 }
             }
         });
+    }
+    private RUDPConnection newConnection(SocketAddress a) {
+        RUDPConnection ret = new RUDPConnection(a, threads.get().getLoop(), this::transmission, timers);
+        ret.setStateCallback(this::onState);
+        ret.setFlushedCallback(this::onFlushed);
+        ret.setReadCallback(this::onRead);
+        ret.context = connectionContext.apply(ret);
+        return ret;
     }
 }
