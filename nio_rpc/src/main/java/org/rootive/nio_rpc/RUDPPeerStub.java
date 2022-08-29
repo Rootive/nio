@@ -3,14 +3,7 @@ package org.rootive.nio_rpc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.rootive.gadget.Linked;
 import org.rootive.nio.RUDPConnection;
-<<<<<<< HEAD
 import org.rootive.rpc.*;
-=======
-import org.rootive.rpc.Collecter;
-import org.rootive.rpc.Parser;
-import org.rootive.rpc.Result;
-import org.rootive.rpc.ServerStub;
->>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -25,10 +18,7 @@ public class RUDPPeerStub {
     public RUDPPeerStub(ServerStub p, RUDPConnection connection) {
         serverStub = new ServerStub(p);
         transmission = new RUDPTransmission(connection);
-<<<<<<< HEAD
         serverStub.register(new Signature(String.class, "address"), connection.getRemote().toString());
-=======
->>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
     }
 
     public RUDPTransmission getTransmission() {

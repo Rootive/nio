@@ -43,8 +43,9 @@ public class RUDPConnection {
     public static final int headerSize = checkSize + countSize;
     static private final int missLine = 2;
     static private final int heartbeatPeriod = 8000;
-    static private final int connectionPeriod = 1000;
+    static private final int connectPeriod = 1000;
     static private final int pardonPeriod = 2000;
+    static private final boolean heartbeat = false;
 
     private final SocketAddress remote;
     private final Loop loop;
@@ -60,7 +61,6 @@ public class RUDPConnection {
     private ScheduledFuture<?> missFuture;
     private ScheduledFuture<?> heartbeatFuture;
     private ScheduledFuture<?> pardonFuture;
-    private ScheduledFuture<?> disconnectFuture;
 
     private State state = State.Connecting;
     private boolean bFlushing;
@@ -110,15 +110,21 @@ public class RUDPConnection {
         loop.run(() -> {
             clear();
             state = State.Connecting;
-            setMiss();
+            startMiss();
             check = (int) System.currentTimeMillis() & 0x1111111;
-            setHeartbeat(0, connectionPeriod);
+            startHeartbeat(0, connectPeriod);
         });
     }
     public void disconnect() throws Exception {
         loop.run(() -> {
+            ByteBuffer b = ByteBuffer.allocate(headerSize);
+            b.putInt(check);
+            b.putInt(0);
+            b.flip();
+            loop.queue(() -> transmission.accept(remote, b));
+
             state = State.Disconnecting;
-            setDisconnect();
+            //handleDisconnect();
         });
     }
     public void flush() throws Exception {
@@ -145,21 +151,14 @@ public class RUDPConnection {
         });
     }
 
-    private void sendDisconnect() {
-        ByteBuffer b = ByteBuffer.allocate(headerSize);
-        b.putInt(check);
-        b.putInt(0);
-        b.flip();
-        loop.queue(() -> transmission.accept(remote, b));
-    }
     void handleReceive(ByteBuffer b) throws Exception {
         loop.run(() -> {
             if (b.remaining() >= checkSize) {
-                setMiss();
+                startMiss();
 
                 if (state == State.Connecting) {
                     state = State.Connected;
-                    setHeartbeat(0, heartbeatPeriod);
+                    startHeartbeat(0, heartbeatPeriod);
 
                     LogLine.begin(Logger.Level.Info).log(remote + " " + state).end();
                     if (connectCallback != null) {
@@ -181,7 +180,7 @@ public class RUDPConnection {
                         var count = b.getInt();
                         if (count == 0) {
                             if (state == State.Connected) {
-                                sendDisconnect();
+                                disconnect();
                             }
                             handleDisconnect();
                         } else if (b.remaining() > 0) {
@@ -191,7 +190,7 @@ public class RUDPConnection {
                         }
                     }
                 } else {
-                    setHeartbeat(0, heartbeatPeriod);
+                    startHeartbeat(0, heartbeatPeriod);
                 }
             }
         });
@@ -202,7 +201,7 @@ public class RUDPConnection {
         cb.putInt(c);
         cb.flip();
         transmission.accept(remote, cb);
-        setHeartbeat(heartbeatPeriod, heartbeatPeriod);
+        startHeartbeat(heartbeatPeriod, heartbeatPeriod);
 
         var n = received.head();
         var _i = receivedCount + 1;
@@ -290,13 +289,13 @@ public class RUDPConnection {
             } while (rn != null);
             unconfirmed.link(ready);
 
-            setHeartbeat(heartbeatPeriod, heartbeatPeriod);
+            startHeartbeat(heartbeatPeriod, heartbeatPeriod);
         }
 
         if (!unsent.isEmpty() && unsent.head().v == null && !unconfirmed.isEmpty()) {
             unsent.removeFirst();
             bFlushing = true;
-            setPardon();
+            startPardon();
         }
     }
     private void handleDisconnect() throws Exception {
@@ -310,9 +309,6 @@ public class RUDPConnection {
         if (pardonFuture != null) {
             pardonFuture.cancel(false);
         }
-        if (disconnectFuture != null) {
-            disconnectFuture.cancel(false);
-        }
 
         LogLine.begin(Logger.Level.Info).log(remote + " " + state).end();
         if (disconnectCallback != null) {
@@ -320,7 +316,7 @@ public class RUDPConnection {
         }
     }
 
-    private void setHeartbeat(int delay, int period) {
+    private void startHeartbeat(int delay, int period) {
         if (heartbeatFuture != null) {
             heartbeatFuture.cancel(false);
         }
@@ -334,7 +330,7 @@ public class RUDPConnection {
 
         }, delay, period, TimeUnit.MILLISECONDS);
     }
-    private void setMiss() {
+    private void startMiss() {
         if (missFuture != null) {
             missFuture.cancel(false);
         }
@@ -349,7 +345,7 @@ public class RUDPConnection {
 
         }, heartbeatPeriod, heartbeatPeriod, TimeUnit.MILLISECONDS);
     }
-    private void setPardon() {
+    private void startPardon() {
         if (pardonFuture != null) {
             pardonFuture.cancel(false);
         }
@@ -365,9 +361,6 @@ public class RUDPConnection {
             });
 
         }, pardonPeriod, pardonPeriod, TimeUnit.MILLISECONDS);
-    }
-    private void setDisconnect() {
-        disconnectFuture = timers.scheduleAtFixedRate(() -> loop.queue(this::sendDisconnect), 0, connectionPeriod, TimeUnit.MILLISECONDS);
     }
 
     private void clear() {
