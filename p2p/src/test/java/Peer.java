@@ -1,11 +1,10 @@
 import org.junit.Test;
 import org.rootive.log.Logger;
 import org.rootive.nio.EventLoopThread;
+import org.rootive.nio.RUDPConnection;
 import org.rootive.rpc.ClientStub;
 import org.rootive.rpc.Function;
 import java.net.InetSocketAddress;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 
 public class Peer {
@@ -14,12 +13,17 @@ public class Peer {
         System.out.println("Hello, world.");
         return "done";
     }
+    public String say(String s) {
+        System.out.println(s);
+        return s;
+    }
 
     @Test
     public void x() throws Exception {
         Logger.start(Logger.Level.All, System.out);
         var local = new InetSocketAddress(45555);
         Function f = new Function(Peer.class, Peer.class.getMethod("sayHelloWorld"));
+        Function fs = new Function(Peer.class, Peer.class.getMethod("say", String.class));
 
         EventLoopThread et = new EventLoopThread();
         et.setThreadInitFunction((e) -> {
@@ -28,6 +32,7 @@ public class Peer {
             Peer peer = new Peer();
             p.register("peer", peer);
             p.register(f);
+            p.register(fs);
 
             p.init(local);
         });
@@ -45,6 +50,7 @@ public class Peer {
         var local = new InetSocketAddress(45556);
         var remote = new InetSocketAddress("127.0.0.1", 45555);
         Function f = new Function(Peer.class, Peer.class.getMethod("sayHelloWorld"));
+        Function fs = new Function(Peer.class, Peer.class.getMethod("say", String.class));
 
         EventLoopThread et = new EventLoopThread();
         et.setThreadInitFunction((e) -> {
@@ -53,25 +59,20 @@ public class Peer {
             Peer peer = new Peer();
             yp.register("peer", peer);
             yp.register(f);
+            yp.register(fs);
 
             yp.init(local);
         });
         et.start();
 
-        var ret = ClientStub.func(f).arg(ClientStub.sig(Peer.class, "peer")).invoke(yp.get(remote)).ret();
+        var invoker = ClientStub.func(fs).arg(ClientStub.sig(Peer.class, "peer"), ClientStub.sig(String.class, "address"));
+        yp.force(remote, invoker);
 
-        System.out.println(new String(ret));
+        System.out.println(new String(invoker.ret()));
+
+        Thread.sleep(5000);
 
         et.join();
     }
 
-    @Test
-    public void timers() throws InterruptedException {
-        var s = new ScheduledThreadPoolExecutor(1);
-        var f = s.scheduleAtFixedRate(() -> System.out.println("x"), 0, 1000, TimeUnit.MILLISECONDS);
-        s.scheduleAtFixedRate(() -> System.out.println("y"), 0, 2000, TimeUnit.MILLISECONDS);
-        Thread.sleep(2000);
-        f.cancel(false);
-        Thread.sleep(8000);
-    }
 }

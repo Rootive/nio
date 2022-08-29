@@ -7,10 +7,10 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="annotation" />
+        <module name="consensus" />
         <module name="test" />
         <module name="nio" />
         <module name="log" />
-        <module name="raft" />
         <module name="nio_rpc" />
         <module name="http" />
         <module name="processor" />
@@ -26,6 +26,7 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="Consensus" target="17" />
       <module name="HTTP" target="17" />
       <module name="untitled" target="17" />
     </bytecodeTargetLevel>

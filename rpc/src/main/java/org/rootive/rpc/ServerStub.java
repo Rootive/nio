@@ -1,6 +1,7 @@
 package org.rootive.rpc;
 
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -33,6 +34,9 @@ public class ServerStub {
     }
     public void register(String identifier, Object obj) {
         register(new Signature(obj.getClass(), identifier), obj);
+    }
+    public void register(Method method) {
+        register(new Function(method.getDeclaringClass(), method));
     }
     public void unregister(Class<?> cls) {
         map.remove(Signature.namespaceStringOf(cls));
