@@ -35,12 +35,9 @@ public class ServerStub {
     public void register(String identifier, Object obj) {
         register(new Signature(obj.getClass(), identifier), obj);
     }
-<<<<<<< HEAD
     public void register(Method method) {
         register(new Function(method.getDeclaringClass(), method));
     }
-=======
->>>>>>> cad0642 (将RUDP改良了些并与RPC组合，完成了Peer的总体设计)
     public void unregister(Class<?> cls) {
         map.remove(Signature.namespaceStringOf(cls));
     }
