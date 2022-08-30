@@ -36,16 +36,24 @@ public class RUDPConnection {
     public enum State {
         Connecting, Connected, Disconnecting, Disconnected
     }
+    public enum Operator {
+        Connect, ConnectConfirm,
+        Message, MessageConfirm,
+        Disconnect, DisconnectConfirm,
+        Heartbeat
+    }
 
     public static final int MTU = 548;
-    private static final int checkSize = 4;
+    private static final int checkSize = 1;
+    private static final int operatorSize = 1;
     private static final int countSize = 4;
-    public static final int headerSize = checkSize + countSize;
-    static private final int missLine = 2;
-    static private final int heartbeatPeriod = 8000;
+    public static final int headerSize = checkSize + operatorSize + countSize;
+
     static private final int connectPeriod = 1000;
+    static private final int connectMissPeriod = 8000;
+    static private final int heartbeatPeriod = 16000;
+    static private final int heartbeatMissPeriod = 32000;
     static private final int pardonPeriod = 2000;
-    static private final boolean heartbeat = false;
 
     private final SocketAddress remote;
     private final Loop loop;
@@ -56,15 +64,14 @@ public class RUDPConnection {
     private Callback disconnectCallback;
     private Callback flushedCallback;
 
-    private int missCount;
     private final ScheduledThreadPoolExecutor timers;
-    private ScheduledFuture<?> missFuture;
     private ScheduledFuture<?> heartbeatFuture;
+    private ScheduledFuture<?> missFuture;
     private ScheduledFuture<?> pardonFuture;
 
     private State state = State.Connecting;
     private boolean bFlushing;
-    private int check;
+    private byte check;
     private int sentCount;
 
     private Linked<Datagram> unsent = new Linked<>();
@@ -106,102 +113,183 @@ public class RUDPConnection {
         return buffer.slice(headerSize, MTU - headerSize);
     }
 
-    public void connect() throws Exception {
-        loop.run(() -> {
-            clear();
-            state = State.Connecting;
-            startMiss();
-            check = (int) System.currentTimeMillis() & 0x1111111;
-            startHeartbeat(0, connectPeriod);
-        });
-    }
-    public void disconnect() throws Exception {
-        loop.run(() -> {
-            ByteBuffer b = ByteBuffer.allocate(headerSize);
-            b.putInt(check);
-            b.putInt(0);
-            b.flip();
-            loop.queue(() -> transmission.accept(remote, b));
-
-            state = State.Disconnecting;
-            //handleDisconnect();
-        });
-    }
-    public void flush() throws Exception {
-        loop.run(() -> {
-            if (state != State.Disconnected) {
-                unsent.addLast(null);
-                handleUnsent();
-            }
-        });
-    }
-    public void message(ByteBuffer b) throws Exception {
-        loop.run(() -> {
-            if (state != State.Disconnected) {
-                ByteBuffer _b = ByteBuffer.wrap(b.array());
-                _b.position(b.arrayOffset() + b.position() - headerSize);
-                _b.limit(b.arrayOffset() + b.limit());
-                _b.mark();
-                _b.putInt(check);
-                _b.putInt(++sentCount);
-                _b.reset();
-                unsent.addLast(new Datagram(sentCount, _b));
-                handleUnsent();
-            }
-        });
-    }
-
     void handleReceive(ByteBuffer b) throws Exception {
         loop.run(() -> {
-            if (b.remaining() >= checkSize) {
-                startMiss();
+            if (state == State.Disconnected) {
+                return;
+            }
+            if (b.remaining() >= checkSize + operatorSize) {
+                setMiss(heartbeatMissPeriod);
 
-                if (state == State.Connecting) {
-                    state = State.Connected;
-                    startHeartbeat(0, heartbeatPeriod);
-
-                    LogLine.begin(Logger.Level.Info).log(remote + " " + state).end();
-                    if (connectCallback != null) {
-                        connectCallback.invoke(this);
-                    }
-
-                    if (!unsent.isEmpty()) {
-                        handleUnsent();
-                    }
-                }
-
-                var c = b.getInt();
+                var c = b.get();
                 if (c > check) {
                     clear();
                     check = c;
                 }
-                if (c >= check) {
-                    if (b.remaining() >= countSize) {
-                        var count = b.getInt();
-                        if (count == 0) {
-                            if (state == State.Connected) {
-                                disconnect();
+                if (c == check) {
+                    var o = Operator.values()[b.get()];
+                    switch (o) {
+                        case Connect -> handleConnect();
+                        case ConnectConfirm -> handleConnectConfirm();
+                        case Message -> {
+                            if (b.remaining() >= countSize) {
+                                var count = b.getInt();
+                                handleMessage(count, b);
                             }
-                            handleDisconnect();
-                        } else if (b.remaining() > 0) {
-                            handleMessage(count, b);
-                        } else if (!unconfirmed.isEmpty()) {
-                            handleConfirm(count);
                         }
+                        case MessageConfirm -> {
+                            if (b.remaining() >= countSize) {
+                                var count = b.getInt();
+                                handleMessageConfirm(count);
+                            }
+                        }
+                        case Disconnect -> handleDisconnect();
+                        case DisconnectConfirm -> handleDisconnectConfirm();
                     }
-                } else {
-                    startHeartbeat(0, heartbeatPeriod);
                 }
             }
         });
     }
+
+    private void doUnsent() throws Exception {
+        if (bFlushing || state != State.Connected) {
+            return;
+        }
+        var n = unsent.head().find(Objects::isNull);
+        Linked<Datagram> ready;
+        if (n != null) {
+            ready = unsent.lSplit(n);
+        } else {
+            ready = unsent;
+            unsent = new Linked<>();
+        }
+
+        if (!ready.isEmpty()) {
+            var rn = ready.head();
+            do {
+                transmission.accept(remote, rn.v.b.duplicate());
+                rn = rn.right();
+            } while (rn != null);
+            unconfirmed.link(ready);
+            setHeartbeat();
+        }
+
+        if (!unsent.isEmpty() && unsent.head().v == null && !unconfirmed.isEmpty()) {
+            unsent.removeFirst();
+            bFlushing = true;
+            setPardon();
+        }
+    }
+    private void setHeartbeat() {
+        if (heartbeatFuture != null) {
+            heartbeatFuture.cancel(false);
+        }
+        heartbeatFuture = timers.scheduleAtFixedRate(() -> {
+
+            ByteBuffer b = ByteBuffer.allocate(checkSize + operatorSize);
+            b.put(check);
+            b.put((byte) Operator.Heartbeat.ordinal());
+            b.flip();
+            LogLine.begin(Logger.Level.Debug).log("send heartbeat to " + remote).end();
+            loop.queue(() -> transmission.accept(remote, b));
+
+        }, heartbeatPeriod, heartbeatPeriod, TimeUnit.MILLISECONDS);
+    }
+    private void setMiss(int period) {
+        if (missFuture != null) {
+            missFuture.cancel(false);
+        }
+        missFuture = timers.scheduleAtFixedRate(() -> {
+
+            loop.queue(this::doDisconnect);
+            LogLine.begin(Logger.Level.Debug).log(remote + "miss").end();
+
+        }, period, period, TimeUnit.MILLISECONDS);
+    }
+
+    public void connect() throws Exception {
+        loop.run(() -> {
+            clear();
+            state = State.Connecting;
+            check = (byte) (System.currentTimeMillis() & 0x7F);
+            setMiss(connectMissPeriod);
+
+            if (heartbeatFuture != null) {
+                heartbeatFuture.cancel(false);
+            }
+            heartbeatFuture = timers.scheduleAtFixedRate(() -> {
+
+                ByteBuffer b = ByteBuffer.allocate(checkSize + operatorSize);
+                b.put(check);
+                b.put((byte) Operator.Connect.ordinal());
+                b.flip();
+                LogLine.begin(Logger.Level.Debug).log("connecting to " + remote).end();
+                loop.queue(() -> transmission.accept(remote, b));
+
+            }, 0, connectPeriod, TimeUnit.MILLISECONDS);
+        });
+    }
+    private void doConnect() throws Exception {
+        if (state != State.Connecting) {
+            return;
+        }
+        state = State.Connected;
+
+        LogLine.begin(Logger.Level.Info).log(remote + " " + state).end();
+        if (connectCallback != null) {
+            connectCallback.invoke(this);
+        }
+
+        if (!unsent.isEmpty()) {
+            doUnsent();
+        }
+    }
+    private void handleConnect() throws Exception {
+        connectConfirm();
+        doConnect();
+    }
+    private void connectConfirm() throws Exception {
+        ByteBuffer b = ByteBuffer.allocate(checkSize + operatorSize);
+        b.put(check);
+        b.put((byte) Operator.ConnectConfirm.ordinal());
+        b.flip();
+        transmission.accept(remote, b);
+        setHeartbeat();
+    }
+    private void handleConnectConfirm() throws Exception {
+        doConnect();
+    }
+    public void message(ByteBuffer b) throws Exception {
+        loop.run(() -> {
+            if (state != State.Connected && state != State.Connecting) {
+                return;
+            }
+            ByteBuffer _b = ByteBuffer.wrap(b.array());
+            _b.position(b.arrayOffset() + b.position() - headerSize);
+            _b.limit(b.arrayOffset() + b.limit());
+            _b.mark();
+            _b.put(check);
+            _b.put((byte) Operator.Message.ordinal());
+            _b.putInt(++sentCount);
+            _b.reset();
+            unsent.addLast(new Datagram(sentCount, _b));
+            doUnsent();
+        });
+    }
     private void handleMessage(int c, ByteBuffer b) throws Exception {
+        if (state != State.Connected) {
+            return;
+        }
+        messageConfirm(c, b);
+    }
+    private void messageConfirm(int c, ByteBuffer b) throws Exception {
         ByteBuffer cb = ByteBuffer.allocate(headerSize);
-        cb.putInt(check);
+        cb.put(check);
+        cb.put((byte) Operator.MessageConfirm.ordinal());
         cb.putInt(c);
         cb.flip();
         transmission.accept(remote, cb);
-        startHeartbeat(heartbeatPeriod, heartbeatPeriod);
+        setHeartbeat();
 
         var n = received.head();
         var _i = receivedCount + 1;
@@ -241,7 +329,10 @@ public class RUDPConnection {
             readCallback.invoke(this, ready);
         }
     }
-    private void handleConfirm(int c) throws Exception {
+    private void handleMessageConfirm(int c) throws Exception {
+        if (state != State.Connected) {
+            return;
+        }
         var n = unconfirmed.head();
         while (n != null) {
             if (c == n.v.c) {
@@ -257,7 +348,7 @@ public class RUDPConnection {
                         flushedCallback.invoke(this);
                     }
                     if (!unsent.isEmpty()) {
-                        handleUnsent();
+                        doUnsent();
                     }
                 }
                 break;
@@ -268,37 +359,57 @@ public class RUDPConnection {
         }
     }
 
-    private void handleUnsent() throws Exception {
-        if (bFlushing || state != State.Connected) {
-            return;
-        }
-        var n = unsent.head().find(Objects::isNull);
-        Linked<Datagram> ready;
-        if (n != null) {
-            ready = unsent.lSplit(n);
-        } else {
-            ready = unsent;
-            unsent = new Linked<>();
-        }
+    public void disconnect() throws Exception {
+        loop.run(() -> {
+            if (state == State.Disconnected || state == State.Disconnecting) {
+                return;
+            }
+            state = State.Disconnecting;
+            setMiss(connectMissPeriod);
+            if (heartbeatFuture != null) {
+                heartbeatFuture.cancel(false);
+            }
+            heartbeatFuture = timers.scheduleAtFixedRate(() -> {
 
-        if (!ready.isEmpty()) {
-            var rn = ready.head();
-            do {
-                transmission.accept(remote, rn.v.b.duplicate());
-                rn = rn.right();
-            } while (rn != null);
-            unconfirmed.link(ready);
+                ByteBuffer b = ByteBuffer.allocate(checkSize + operatorSize);
+                b.put(check);
+                b.put((byte) Operator.Disconnect.ordinal());
+                b.flip();
+                loop.queue(() -> transmission.accept(remote, b));
 
-            startHeartbeat(heartbeatPeriod, heartbeatPeriod);
-        }
+            }, 0, connectPeriod, TimeUnit.MILLISECONDS);
+        });
+    }
+    public void forceDisconnect() throws Exception {
+        loop.run(() -> {
+            if (state == State.Disconnected) {
+                return;
+            }
+            ByteBuffer b = ByteBuffer.allocate(checkSize + operatorSize);
+            b.put(check);
+            b.put((byte) Operator.Disconnect.ordinal());
+            b.flip();
+            transmission.accept(remote, b);
+            doDisconnect();
 
-        if (!unsent.isEmpty() && unsent.head().v == null && !unconfirmed.isEmpty()) {
-            unsent.removeFirst();
-            bFlushing = true;
-            startPardon();
-        }
+        });
     }
     private void handleDisconnect() throws Exception {
+        disconnectConfirm();
+        doDisconnect();
+    }
+    private void disconnectConfirm() {
+        ByteBuffer b = ByteBuffer.allocate(checkSize + operatorSize);
+        b.put(check);
+        b.put((byte) Operator.DisconnectConfirm.ordinal());
+        b.flip();
+        loop.queue(() -> transmission.accept(remote, b));
+        setHeartbeat();
+    }
+    private void handleDisconnectConfirm() throws Exception {
+        doDisconnect();
+    }
+    private void doDisconnect() throws Exception {
         state = State.Disconnected;
         if (missFuture != null) {
             missFuture.cancel(false);
@@ -316,36 +427,17 @@ public class RUDPConnection {
         }
     }
 
-    private void startHeartbeat(int delay, int period) {
-        if (heartbeatFuture != null) {
-            heartbeatFuture.cancel(false);
-        }
-        heartbeatFuture = timers.scheduleAtFixedRate(() -> {
 
-            ByteBuffer b = ByteBuffer.allocate(checkSize);
-            b.putInt(check);
-            b.flip();
-            LogLine.begin(Logger.Level.Debug).log("send heartbeat to " + remote).end();
-            loop.queue(() -> transmission.accept(remote, b));
-
-        }, delay, period, TimeUnit.MILLISECONDS);
-    }
-    private void startMiss() {
-        if (missFuture != null) {
-            missFuture.cancel(false);
-        }
-        missCount = 0;
-        missFuture = timers.scheduleAtFixedRate(() -> {
-
-            if (missCount == missLine) {
-                loop.queue(this::handleDisconnect);
+    public void flush() throws Exception {
+        loop.run(() -> {
+            if (state != State.Connected) {
+                return;
             }
-            ++missCount;
-            LogLine.begin(Logger.Level.Debug).log("miss " + missCount + " from " + remote).end();
-
-        }, heartbeatPeriod, heartbeatPeriod, TimeUnit.MILLISECONDS);
+            unsent.addLast(null);
+            doUnsent();
+        });
     }
-    private void startPardon() {
+    private void setPardon() {
         if (pardonFuture != null) {
             pardonFuture.cancel(false);
         }

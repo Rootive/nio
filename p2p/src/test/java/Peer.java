@@ -71,7 +71,7 @@ public class Peer {
         System.out.println(new String(invoker.ret()));
 
         Thread.sleep(5000);
-
+        yp.disconnect(remote);
         et.join();
     }
 

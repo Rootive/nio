@@ -41,7 +41,7 @@ public class RUDPServer implements Handler {
     private final LoopThreadPool threads;
     private final Linked<Send> unsent = new Linked<>();
     private final HashMap<SocketAddress, RUDPConnection> cs = new HashMap<>();
-    private Function<RUDPConnection, Object> connectionContext = (c) -> null;
+    private Function<RUDPConnection, Object> contextSetter = (c) -> null;
 
     public RUDPServer(ScheduledThreadPoolExecutor timers, EventLoop eventLoop, int threadsCount) {
         this.timers = timers;
@@ -55,8 +55,8 @@ public class RUDPServer implements Handler {
     public void setReadCallback(ReadCallback readCallback) {
         this.readCallback = readCallback;
     }
-    public void setConnectionContext(Function<RUDPConnection, Object> connectionContext) {
-        this.connectionContext = connectionContext;
+    public void setContextSetter(Function<RUDPConnection, Object> contextSetter) {
+        this.contextSetter = contextSetter;
     }
 
     public void init(InetSocketAddress local) throws Exception {
@@ -96,12 +96,21 @@ public class RUDPServer implements Handler {
             cr.run(c);
         });
     }
+    public void foreach(Runner cr) throws Exception {
+        eventLoop.run(() -> cs.forEach((k, v) -> {
+            try {
+                cr.run(v);
+            } catch (Exception e) {
+                eventLoop.handleException(e);
+            }
+        }));
+    }
 
     private RUDPConnection newConnection(SocketAddress a) {
         RUDPConnection ret = new RUDPConnection(a, threads.get().getLoop(), this::transmission, timers);
         ret.setReadCallback(this::onRead);
         ret.setDisconnectCallback(this::onDisconnect);
-        ret.context = connectionContext.apply(ret);
+        ret.context = contextSetter.apply(ret);
         return ret;
     }
 

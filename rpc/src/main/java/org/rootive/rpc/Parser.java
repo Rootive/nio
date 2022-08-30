@@ -1,10 +1,11 @@
 package org.rootive.rpc;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 public class Parser {
     public enum Type {
-        Unknown, Literal, Reference, Functor
+        Unknown, Literal, Reference, Functor, Bytes
     }
     private final Type type;
     private String literal;
@@ -58,6 +59,8 @@ public class Parser {
                     }
                 }
             }
+        } else if (string.charAt(0) == '<' && string.charAt(end) == '>') {
+            type = Type.Bytes;
         } else {
             type = Type.Literal;
             literal = string;

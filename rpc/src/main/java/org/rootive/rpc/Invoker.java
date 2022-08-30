@@ -10,13 +10,12 @@ public class Invoker {
     private Result result;
     private final ReentrantLock returnLock = new ReentrantLock();
     private final Condition returnCondition = returnLock.newCondition();
+    static private final byte[] header = new byte[ClientStub.headerSize];
     protected final byte[] data;
 
     Invoker(Reference reference, Object obj, Object...args) throws IOException, NoSuchFieldException, IllegalAccessException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        for (var _i = 0; _i < ClientStub.headerSize; ++_i) {
-            outputStream.write(0);
-        }
+        outputStream.write(header);
         var referenceData = reference.getData();
         outputStream.write(referenceData, 0, referenceData.length);
         outputStream.write('(');

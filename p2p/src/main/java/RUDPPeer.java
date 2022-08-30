@@ -13,9 +13,19 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 public class RUDPPeer {
+    static public class Context {
+        public RUDPPeerStub stub;
+        public Object context;
+
+        public Context(RUDPPeerStub stub, Object context) {
+            this.stub = stub;
+            this.context = context;
+        }
+    }
 
     private final RUDPServer server;
     private final ServerStub stub = new ServerStub(null);
+    private java.util.function.Function<RUDPConnection, Object> contextSetter = (c) -> null;
 
     static private final Function connectFunc;
     static private final Signature connectSig;
@@ -51,14 +61,17 @@ public class RUDPPeer {
     }
 
     static public RUDPTransmission getTransmission(RUDPConnection c) {
-        return ((RUDPPeerStub) c.context).getTransmission();
+        return ((Context) c.context).stub.getTransmission();
+    }
+    public void setContextSetter(java.util.function.Function<RUDPConnection, Object> contextSetter) {
+        this.contextSetter = contextSetter;
     }
 
     public RUDPPeer(EventLoop eventLoop, int timersCount, int threadsCount) {
         server = new RUDPServer(new ScheduledThreadPoolExecutor(timersCount), eventLoop, threadsCount);
         server.setReadCallback(this::onRead);
         server.setDisconnectCallback(this::onDisconnect);
-        server.setConnectionContext((c) -> new RUDPPeerStub(stub, c));
+        server.setContextSetter((c) -> new Context(new RUDPPeerStub(stub, c), contextSetter.apply(c)));
     }
 
     public void register(Namespace namespace) {
@@ -90,6 +103,9 @@ public class RUDPPeer {
     public void force(SocketAddress remote, Invoker invoker) throws Exception {
         server.force(remote, (c) -> invoker.invoke(getTransmission(c)));
     }
+    public void disconnect(SocketAddress remote) throws Exception {
+        server.run(remote, RUDPConnection::disconnect);
+    }
     public void punch(String aa, int ap, String ba, int bp) throws Exception {
         force(new InetSocketAddress(aa, ap), connectRef.arg(peerRef, ba, bp));
         force(new InetSocketAddress(ba, bp), connectRef.arg(peerRef, aa, ap));
@@ -99,15 +115,15 @@ public class RUDPPeer {
         int bi = a.indexOf(':');
 
         punch(
-                a.substring(0, ai), Integer.parseInt(a.substring(ai + 1)),
-                b.substring(0, bi), Integer.parseInt(b.substring(bi + 1))
+                a.substring(1, ai), Integer.parseInt(a.substring(ai + 1)),
+                b.substring(1, bi), Integer.parseInt(b.substring(bi + 1))
         );
     }
 
     private void onDisconnect(RUDPConnection c) {
-        ((RUDPPeerStub) c.context).disconnect();
+        ((Context) c.context).stub.disconnect();
     }
     private void onRead(RUDPConnection c, Linked<ByteBuffer> l) throws Exception {
-        ((RUDPPeerStub) c.context).handleReceived(l);
+        ((Context) c.context).stub.handleReceived(l);
     }
 }

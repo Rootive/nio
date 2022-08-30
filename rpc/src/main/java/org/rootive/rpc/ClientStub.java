@@ -54,7 +54,7 @@ public class ClientStub {
         if (arg instanceof Reference ref) {
             outputStream.write(ref.getData());
         } else if (arg instanceof Invoker invoker) {
-            outputStream.write(invoker.data, 0, invoker.data.length - 1);
+            outputStream.write(invoker.data, headerSize, invoker.data.length - 1);
         } else if (arg instanceof Proxy) {
             if (h == null) {
                 h = Proxy.class.getDeclaredField("h");
@@ -63,6 +63,12 @@ public class ClientStub {
             var handler = h.get(arg);
             var ref = ((ClientInvocationHandler) handler).getObj();
             outputStream.write(ref.getData());
+        } else if (arg instanceof byte[] bs) {
+            outputStream.write('<');
+            outputStream.write((bs.length + " ").getBytes());
+            outputStream.write(bs);
+            outputStream.write('>');
+
         } else {
             new ObjectMapper().writeValue(outputStream, arg);
         }
