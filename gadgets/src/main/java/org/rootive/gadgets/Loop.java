@@ -1,4 +1,4 @@
-package org.rootive.gadget;
+package org.rootive.gadgets;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;

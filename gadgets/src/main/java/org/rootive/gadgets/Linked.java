@@ -1,4 +1,4 @@
-package org.rootive.gadget;
+package org.rootive.gadgets;
 
 public class Linked<T> {
     private LinkedNode<T> h;

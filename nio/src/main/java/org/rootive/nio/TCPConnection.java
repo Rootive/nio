@@ -1,9 +1,8 @@
 package org.rootive.nio;
 
-import org.rootive.gadget.ByteBufferList;
+import org.rootive.gadgets.ByteBufferList;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;

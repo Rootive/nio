@@ -1,4 +1,4 @@
-package org.rootive.gadget;
+package org.rootive.gadgets;
 
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;

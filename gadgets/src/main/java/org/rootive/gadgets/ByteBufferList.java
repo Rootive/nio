@@ -1,4 +1,4 @@
-package org.rootive.gadget;
+package org.rootive.gadgets;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,6 +9,7 @@ import java.nio.channels.ByteChannel;
 public class ByteBufferList {
     private final Linked<ByteBuffer> linked = new Linked<>();
     private int remaining;
+    private int count;
 
     public Linked<ByteBuffer> getLinked() {
         return linked;
@@ -70,27 +71,42 @@ public class ByteBufferList {
         return remaining - ret;
     }
 
-    public byte[] toByteArray() {
+    public ByteBuffer toByteBuffer() {
         ByteBuffer ret = ByteBuffer.allocate(remaining);
         var n = linked.head();
         while (n != null) {
             ret.put(n.v.duplicate());
             n = n.right();
         }
-        return ret.array();
+        ret.flip();
+        return ret;
     }
 
     public void addFirst(ByteBuffer value) {
+        ++count;
         remaining += value.remaining();
         linked.addFirst(value);
     }
     public void addLast(ByteBuffer value) {
+        ++count;
         remaining += value.remaining();
         linked.addLast(value);
     }
     public ByteBuffer removeFirst() {
+        --count;
         remaining -= linked.head().v.remaining();
         return linked.removeFirst();
+    }
+    public ByteBuffer removeLast() {
+        --count;
+        remaining -= linked.tail().v.remaining();
+        return linked.removeLast();
+    }
+    public ByteBuffer head() {
+        return linked.isEmpty() ? null : linked.head().v.duplicate();
+    }
+    public ByteBuffer tail() {
+        return linked.isEmpty() ? null : linked.tail().v.duplicate();
     }
     public boolean isEmpty() {
         return linked.isEmpty();
@@ -101,5 +117,8 @@ public class ByteBufferList {
     }
     public int totalRemaining() {
         return remaining;
+    }
+    public int count() {
+        return count;
     }
 }

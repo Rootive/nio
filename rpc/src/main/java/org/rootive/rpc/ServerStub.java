@@ -1,140 +1,175 @@
 package org.rootive.rpc;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.rootive.gadgets.ByteBufferList;
 
 public class ServerStub {
+    @FunctionalInterface public interface Transmission {
+        void send(ByteBuffer data);
+    }
+    static private final ByteBuffer doneGap = Gap.get(Return.Status.Done);
+    static private final ByteBuffer transmissionExceptionGap = Gap.get(Return.Status.TransmissionException);
+    static private final ByteBuffer parseExceptionGap = Gap.get(Return.Status.ParseException);
+    static private final ByteBuffer invocationExceptionGap = Gap.get(Return.Status.InvocationException);
+    static private ByteBuffer doneGap() {
+        return doneGap.duplicate();
+    }
+    static private ByteBuffer transmissionExceptionGap() {
+        return transmissionExceptionGap.duplicate();
+    }
+    static private ByteBuffer parseExceptionGap() {
+        return parseExceptionGap.duplicate();
+    }
+    static private ByteBuffer invocationExceptionGap() {
+        return invocationExceptionGap.duplicate();
+    }
+
+    static public ByteBuffer single(byte[] bs, Type type) {
+        return ByteBuffer.wrap(
+                        new byte[Constexpr.pre + Constexpr.headerSize + bs.length + Constexpr.post]
+                        , Constexpr.pre
+                        , Constexpr.headerSize + bs.length
+                )
+                .putInt(bs.length)
+                .put((byte) type.ordinal())
+                .put(bs)
+                .flip();
+    }
 
     private final ServerStub parent;
-    private final HashMap<String, Namespace> map = new HashMap<>();
+    private final HashMap<String, HashMap<String, Object>> map = new HashMap<>();
+    private final Transmission transmission;
 
-    public ServerStub(ServerStub parent) {
+    public ServerStub(ServerStub parent, Transmission transmission) {
         this.parent = parent;
+        this.transmission = transmission;
     }
-    public void register(Namespace namespace) {
-        var namespaceString = namespace.getNamespaceString();
-        assert !map.containsKey(namespaceString);
-        map.put(namespaceString, namespace);
+
+    public void registerNamespace(String namespaceString, HashMap<String, Object> m) {
+        map.put(namespaceString, m);
     }
-    public void register(Signature signature, Object obj) {
-        var namespace = map.get(signature.getNamespaceString());
+    public void registerNamespace(Class<?> namespaceString, HashMap<String, Object> m) {
+        map.put(Signature.namespaceStringOf(namespaceString), m);
+    }
+    public void register(String namespaceString, String identifier, Object obj) {
+        var namespace = map.get(namespaceString);
         if (namespace != null) {
-            namespace.register(signature, obj);
+            namespace.put(identifier, obj);
         } else {
-            namespace = new Namespace(signature, obj);
-            register(namespace);
+            namespace = new HashMap<>();
+            namespace.put(identifier, obj);
+            registerNamespace(namespaceString, namespace);
         }
     }
-    public void register(Function function) {
-        register(new Signature(function), function);
+    public void register(Class<?> namespaceString, String identifier, Object obj) {
+        register(Signature.namespaceStringOf(namespaceString), identifier, obj);
     }
     public void register(String identifier, Object obj) {
-        register(new Signature(obj.getClass(), identifier), obj);
+        register(Signature.namespaceStringOf(obj), identifier, obj);
     }
-    public void register(Method method) {
-        register(new Function(method.getDeclaringClass(), method));
+    public void register(String identifier, Function f) {
+        register(Signature.namespaceStringOf(f), identifier, f);
     }
-    public void unregister(Class<?> cls) {
-        map.remove(Signature.namespaceStringOf(cls));
-    }
-    public Namespace get(Class<?> cls) {
-        var ret = map.get(Signature.namespaceStringOf(cls));
+    public HashMap<String, Object> getNamespace(String namespaceString) {
+        var ret = map.get(namespaceString);
         if (ret == null && parent != null) {
-            ret = parent.get(cls);
+            ret = parent.getNamespace(namespaceString);
             if (ret != null) {
-                register(ret);
+                registerNamespace(namespaceString, ret);
             }
         }
         return ret;
     }
-    public Object get(Signature signature) {
-        var namespace = getNamespaceOf(signature);
+    public Object get(String namespaceString, String identifier) {
+        var namespace = getNamespace(namespaceString);
         if (namespace != null) {
-            return namespace.get(signature);
-        } else {
-            return null;
+            return namespace.get(identifier);
         }
+        return null;
     }
-    public Namespace getNamespaceOf(Signature signature) {
-        var ret = map.get(signature.getNamespaceString());
-        if (ret == null && parent != null) {
-            ret = parent.getNamespaceOf(signature);
-            if (ret != null) {
-                register(ret);
+
+    private Object parse(ByteBufferList ds, Class<?> context) throws ParseException, InvocationException {
+        var d = ds.removeFirst();
+        var t = d.get();
+        if (t < 0 || t >= Type.values().length) {
+            throw new ParseException("unexpect type: " + t);
+        }
+        Object ret = null;
+        switch (Type.values()[t]) {
+            case Signature -> {
+                var sig = new String(d.array(), d.arrayOffset() + d.position(), d.arrayOffset() + d.limit());
+                var space = sig.indexOf(' ');
+                var o = get(sig.substring(0, space), sig.substring(space + 1));
+                if (o == null) {
+                    throw new ParseException(sig + " refer to null");
+                }
+                if (o instanceof Function f) {
+                    var pcs = f.getParameterClasses();
+                    if (ds.count() < pcs.size()) {
+                        throw new ParseException("expect " + pcs.size() + " parameters but " + ds.count() + " left");
+                    }
+                    Object po = parse(ds, pcs.get(0));
+                    Object[] ps = new Object[pcs.size() - 1];
+                    for (var _i = 0; _i < ps.length; ++_i) {
+                        ps[_i] = parse(ds, pcs.get(_i + 1));
+                    }
+                    try {
+                        ret = f.invoke(po, ps);
+                    } catch (InvocationTargetException e) {
+                        throw new InvocationException(e.getTargetException().getMessage());
+                    } catch (IllegalAccessException e) {
+                        throw new ParseException(e.getMessage());
+                    }
+                } else {
+                    ret = o;
+                }
+            }
+            case Bytes -> {
+                ret = new byte[d.remaining()];
+                System.arraycopy(d.array(), d.arrayOffset() + d.position(), (byte[]) ret, 0, d.remaining());
+            }
+            case Literal -> {
+                var s = new String(d.array(), d.arrayOffset() + d.position(), d.remaining());
+                try {
+                    ret = new ObjectMapper().readValue(s, context);
+                } catch (IOException e) {
+                    throw new ParseException("parse json: " + s + " failed");
+                }
             }
         }
         return ret;
     }
-    private Object invoke(Parser p, Object context) throws JsonProcessingException, InvocationTargetException, IllegalAccessException, BadParametersException, BadReferenceException {
-        switch (p.getType()) {
-            case Literal -> {
-                if (context instanceof Class) {
-                    return new ObjectMapper().readValue(p.getLiteral(), (Class<?>) context);
-                } else {
-                    return null;
-                }
-            }
-            case Reference -> {
-                var object = get(p.getSignature());
-                if (object == null) {
-                    throw new BadReferenceException("unrecognized reference: " + p.getSignature().toString());
-                }
-                return object;
-            }
-            case Functor -> {
-                Function function = (Function) get(p.getSignature());
-                var parameterClasses = function.getParameterClasses();
-                var parameterCount = parameterClasses.size();
-                var parameterParsers = p.getParameters();
-                if (parameterCount == parameterParsers.size()) {
-                    Object obj = invoke(parameterParsers.get(0), parameterClasses.get(0));
-                    Object[] parameters = new Object[parameterCount - 1];
-                    for (var _i = 1; _i < parameterCount; ++_i) {
-                        parameters[_i - 1] = invoke(parameterParsers.get(_i), parameterClasses.get(_i));
-                    }
-                    return function.invoke(obj, parameters);
-                } else {
-                    throw new BadParametersException("expect " + parameterCount + " parameters but " + parameterParsers.size() + " provided");
-                }
-            }
-            default -> throw new BadParametersException("unrecognized signature: " + p.getLiteral());
-        }
-    }
-    public Result invoke(Parser p) {
-        Result result = new Result();
-        ObjectMapper json = new ObjectMapper();
-        Object res = null;
-        try {
-            res = invoke(p, null);
-            result.setStat(Result.Status.DONE);
-        } catch (JsonProcessingException e) {
-            result.setStat(Result.Status.DESERIALIZATION_ERROR);
-            result.setMsg(e.getMessage());
-        } catch (InvocationTargetException e) {
-            result.setStat(Result.Status.INVOCATION_ERROR);
-            result.setMsg(e.getTargetException().getMessage());
-        } catch (IllegalAccessException e) {
-            result.setStat(Result.Status.BAD_REGISTER);
-            result.setMsg(e.getMessage());
-        } catch (BadReferenceException e) {
-            result.setStat(Result.Status.BAD_REFERENCE);
-            result.setMsg(e.getMessage());
-        } catch (BadParametersException e) {
-            result.setStat(Result.Status.BAD_PARAMETERS);
-            result.setMsg(e.getMessage());
-        }
-        if (res != null) {
+
+    public void run(Collector c) throws Exception {
+        var ds = c.getDone();
+        if (ds.head().get() == Type.Signature.ordinal()) {
             try {
-                result.setData(json.writeValueAsBytes(res));
-            } catch (JsonProcessingException e) {
-                result.setStat(Result.Status.SERIALIZATION_ERROR);
-                result.setMsg(e.getMessage());
+                var o = parse(ds, null);
+                if (c.getCtx() == Gap.Context.CallOnly) {
+
+                } else if (o instanceof byte[] bs && c.getCtx() == Gap.Context.CallBytes) {
+                    res = single(bs, Type.Bytes);
+                } else {
+                    res = single(new ObjectMapper().writeValueAsBytes(o), Type.Literal);
+                }
+                gap = doneGap();
+            } catch (ParseException | JsonProcessingException e) {
+                transmission.send(single(e.getMessage().getBytes(), Type.Bytes));
+                transmission.send(parseExceptionGap());
+            } catch (InvocationException e) {
+                transmission.send(single(e.getMessage().getBytes(), Type.Bytes));
+                transmission.send(invocationExceptionGap());
             }
+        } else {
+            transmission.send(single("expect signature here".getBytes(), Type.Bytes));
+            transmission.send(parseExceptionGap());
         }
-        return result;
     }
+
 }

@@ -1,4 +1,4 @@
-import org.rootive.gadget.Linked;
+import org.rootive.gadgets.Linked;
 import org.rootive.nio.EventLoop;
 import org.rootive.nio.RUDPConnection;
 import org.rootive.nio.RUDPServer;

@@ -1,4 +1,3 @@
-import org.rootive.gadget.Linked;
 import org.rootive.nio.EventLoopThread;
 
 import java.net.InetSocketAddress;

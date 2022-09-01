@@ -1,7 +1,7 @@
 package org.rootive.nio;
 
-import org.rootive.gadget.Linked;
-import org.rootive.gadget.LoopThreadPool;
+import org.rootive.gadgets.Linked;
+import org.rootive.gadgets.LoopThreadPool;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;

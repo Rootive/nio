@@ -1,4 +1,4 @@
-package org.rootive.gadget;
+package org.rootive.gadgets;
 
 import java.util.function.Predicate;
 
