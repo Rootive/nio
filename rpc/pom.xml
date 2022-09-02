@@ -24,36 +24,9 @@
         </dependency>
         <dependency>
             <groupId>org.rootive</groupId>
-            <artifactId>gadgets</artifactId>
-            <version>0.2</version>
-        </dependency>
-        <dependency>
-            <groupId>org.rootive</groupId>
-            <artifactId>annotation</artifactId>
-            <version>0.2</version>
-        </dependency>
-        <dependency>
-            <groupId>org.rootive</groupId>
-            <artifactId>processor</artifactId>
+            <artifactId>util</artifactId>
             <version>0.2</version>
         </dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.10.1</version>
-                <configuration>
-                    <annotationProcessors>
-                        <annotationProcessor>
-                            org.rootive.processor.ClientProcessor
-                        </annotationProcessor>
-                    </annotationProcessors>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>

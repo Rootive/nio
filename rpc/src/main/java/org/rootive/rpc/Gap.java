@@ -3,8 +3,8 @@ package org.rootive.rpc;
 import java.nio.ByteBuffer;
 
 public class Gap {
-    enum Context {
-        CallLiteral, CallBytes, CallOnly, Return
+    public enum Context {
+        CallLiteral, CallBytes, Return
     }
 
     static public final int contextSize = 1;
@@ -16,10 +16,11 @@ public class Gap {
                         , Constexpr.pre
                         , Constexpr.headerSize + contextSize
                 )
+                .mark()
                 .putInt(contextSize)
                 .put((byte) Type.Gap.ordinal())
                 .put((byte) c.ordinal())
-                .flip();
+                .reset();
     }
     static public ByteBuffer get(Return.Status stat) {
         return ByteBuffer.wrap(
@@ -27,17 +28,18 @@ public class Gap {
                         , Constexpr.pre
                         , Constexpr.headerSize + contextSize + statusSize
                 )
+                .mark()
                 .putInt(contextSize)
                 .put((byte) Type.Gap.ordinal())
                 .put((byte) Context.Return.ordinal())
                 .put((byte) stat.ordinal())
-                .flip();
+                .reset();
     }
 
     private Context ctx;
     private byte status;
 
-    public Context getCtx() {
+    public Context getContext() {
         return ctx;
     }
     public byte getStatus() {

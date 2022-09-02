@@ -5,26 +5,27 @@ import org.rootive.log.Logger;
 
 import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
+import java.util.function.Consumer;
 
 public class TCPServer {
     private final EventLoopThreadPool threads;
     private final EventLoop eventLoop;
     private final Acceptor acceptor = new Acceptor();
-    private TCPConnection.Callback connectionCallback;
-    private TCPConnection.Callback readCallback;
+    private Consumer<TCPConnection> connectionCallback;
+    private Consumer<TCPConnection> readCallback;
 
     public TCPServer(EventLoop eventLoop, int threadsCount) {
         threads = new EventLoopThreadPool(threadsCount);
         this.eventLoop = eventLoop;
     }
 
-    public void setThreadInitFunction(EventLoopThread.ThreadInitFunction threadInitFunction) {
+    public void setThreadInitFunction(Consumer<EventLoop> threadInitFunction) {
         threads.setThreadInitFunction(threadInitFunction);
     }
-    public void setConnectionCallback(TCPConnection.Callback connectionCallback) {
+    public void setConnectionCallback(Consumer<TCPConnection> connectionCallback) {
         this.connectionCallback = connectionCallback;
     }
-    public void setReadCallback(TCPConnection.Callback readCallback) {
+    public void setReadCallback(Consumer<TCPConnection> readCallback) {
         this.readCallback = readCallback;
     }
 
@@ -41,7 +42,7 @@ public class TCPServer {
             return eventLoop;
         }
     }
-    private void onNewConnection(SocketChannel sc) throws Exception {
+    private void onNewConnection(SocketChannel sc) {
         var e = getE();
         var connection = new TCPConnection(sc);
         connection.setConnectionCallback(this::onConnection);
@@ -50,13 +51,13 @@ public class TCPServer {
         connection.setHwmCallback(this::onHwm);
         e.run(() -> connection.register(e));
     }
-    private void onConnection(TCPConnection connection) throws Exception {
+    private void onConnection(TCPConnection connection) {
         LogLine.begin(Logger.Level.Info).log(connection.toString() + ": " + connection.getState()).end();
         if (connectionCallback != null) {
             connectionCallback.accept(connection);
         }
     }
-    private void onRead(TCPConnection connection) throws Exception {
+    private void onRead(TCPConnection connection) {
         if (readCallback != null) {
             readCallback.accept(connection);
         }
@@ -64,7 +65,7 @@ public class TCPServer {
     private void onWriteFinished(TCPConnection connection) {
         LogLine.begin(Logger.Level.Info).log(connection.toString() + ": write finished").end();
     }
-    private void onHwm(TCPConnection connection) throws Exception {
+    private void onHwm(TCPConnection connection) {
         LogLine.begin(Logger.Level.Info).log(connection.toString() + ": high-water mark " + connection.getWriteBuffersRemaining()).end();
         connection.forceDisconnect();
     }

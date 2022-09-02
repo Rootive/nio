@@ -4,15 +4,13 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.rootive.gadgets.ByteBufferList;
+import org.rootive.util.ByteBufferList;
 
 public class ServerStub {
-    @FunctionalInterface public interface Transmission {
-        void send(ByteBuffer data);
-    }
     static private final ByteBuffer doneGap = Gap.get(Return.Status.Done);
     static private final ByteBuffer transmissionExceptionGap = Gap.get(Return.Status.TransmissionException);
     static private final ByteBuffer parseExceptionGap = Gap.get(Return.Status.ParseException);
@@ -36,17 +34,18 @@ public class ServerStub {
                         , Constexpr.pre
                         , Constexpr.headerSize + bs.length
                 )
+                .mark()
                 .putInt(bs.length)
                 .put((byte) type.ordinal())
                 .put(bs)
-                .flip();
+                .reset();
     }
 
     private final ServerStub parent;
     private final HashMap<String, HashMap<String, Object>> map = new HashMap<>();
-    private final Transmission transmission;
+    private final Consumer<ByteBuffer> transmission;
 
-    public ServerStub(ServerStub parent, Transmission transmission) {
+    public ServerStub(ServerStub parent, Consumer<ByteBuffer> transmission) {
         this.parent = parent;
         this.transmission = transmission;
     }
@@ -103,7 +102,7 @@ public class ServerStub {
         Object ret = null;
         switch (Type.values()[t]) {
             case Signature -> {
-                var sig = new String(d.array(), d.arrayOffset() + d.position(), d.arrayOffset() + d.limit());
+                var sig = new String(d.array(), d.arrayOffset() + d.position(), d.remaining());
                 var space = sig.indexOf(' ');
                 var o = get(sig.substring(0, space), sig.substring(space + 1));
                 if (o == null) {
@@ -111,13 +110,13 @@ public class ServerStub {
                 }
                 if (o instanceof Function f) {
                     var pcs = f.getParameterClasses();
-                    if (ds.count() < pcs.size()) {
-                        throw new ParseException("expect " + pcs.size() + " parameters but " + ds.count() + " left");
+                    if (ds.count() <= pcs.length) {
+                        throw new ParseException("expect more parameters");
                     }
-                    Object po = parse(ds, pcs.get(0));
-                    Object[] ps = new Object[pcs.size() - 1];
+                    Object po = parse(ds, f.getObjectClass());
+                    Object[] ps = new Object[pcs.length];
                     for (var _i = 0; _i < ps.length; ++_i) {
-                        ps[_i] = parse(ds, pcs.get(_i + 1));
+                        ps[_i] = parse(ds, pcs[_i]);
                     }
                     try {
                         ret = f.invoke(po, ps);
@@ -146,30 +145,48 @@ public class ServerStub {
         return ret;
     }
 
-    public void run(Collector c) throws Exception {
+    public void run(Collector c) {
         var ds = c.getDone();
+
+        ByteBuffer res;
+        ByteBuffer gap;
         if (ds.head().get() == Type.Signature.ordinal()) {
             try {
                 var o = parse(ds, null);
-                if (c.getCtx() == Gap.Context.CallOnly) {
-
-                } else if (o instanceof byte[] bs && c.getCtx() == Gap.Context.CallBytes) {
+                if (o instanceof byte[] bs && c.getContext() == Gap.Context.CallBytes) {
                     res = single(bs, Type.Bytes);
                 } else {
                     res = single(new ObjectMapper().writeValueAsBytes(o), Type.Literal);
                 }
                 gap = doneGap();
             } catch (ParseException | JsonProcessingException e) {
-                transmission.send(single(e.getMessage().getBytes(), Type.Bytes));
-                transmission.send(parseExceptionGap());
+                try {
+                    res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal);
+                } catch (JsonProcessingException ex) {
+                    res = single(new byte[0], Type.Bytes);
+                    ex.printStackTrace();
+                }
+                gap = parseExceptionGap();
             } catch (InvocationException e) {
-                transmission.send(single(e.getMessage().getBytes(), Type.Bytes));
-                transmission.send(invocationExceptionGap());
+                try {
+                    res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal);
+                } catch (JsonProcessingException ex) {
+                    res = single(new byte[0], Type.Bytes);
+                    ex.printStackTrace();
+                }
+                gap = invocationExceptionGap();
             }
         } else {
-            transmission.send(single("expect signature here".getBytes(), Type.Bytes));
-            transmission.send(parseExceptionGap());
+            try {
+                res = single(new ObjectMapper().writeValueAsBytes("expect signature here"), Type.Literal);
+            } catch (JsonProcessingException e) {
+                res = single(new byte[0], Type.Bytes);
+                e.printStackTrace();
+            }
+            gap = parseExceptionGap();
         }
+        transmission.accept(res);
+        transmission.accept(gap);
     }
 
 }

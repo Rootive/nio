@@ -2,23 +2,17 @@ package org.rootive.nio;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketOption;
-import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.function.Consumer;
 
 public class Acceptor implements Handler {
-    @FunctionalInterface
-    public interface Callback {
-        void accept(SocketChannel sc) throws Exception;
-    }
-
     private ServerSocketChannel channel;
     private SelectionKey selectionKey;
-    private Callback newConnectionCallback;
+    private Consumer<SocketChannel> newConnectionCallback;
 
-    public void bind(InetSocketAddress local, Callback newConnectionCallback) throws IOException {
+    public void bind(InetSocketAddress local, Consumer<SocketChannel> newConnectionCallback) throws IOException {
         this.newConnectionCallback = newConnectionCallback;
         channel = ServerSocketChannel.open();
         channel.bind(local);
@@ -27,7 +21,12 @@ public class Acceptor implements Handler {
         channel.configureBlocking(false);
         selectionKey = eventLoop.add(channel, SelectionKey.OP_ACCEPT, this);
     }
-    public void handleEvent() throws Exception {
-        newConnectionCallback.accept(channel.accept());
+    @Override
+    public void handleEvent() {
+        try {
+            newConnectionCallback.accept(channel.accept());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

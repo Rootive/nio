@@ -1,4 +1,4 @@
-package org.rootive.gadgets;
+package org.rootive.util;
 
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -23,7 +23,7 @@ public class LoopThread {
     public long getThreadId() { return thread.getId(); }
     public boolean isStarted() { return loop.isStarted(); }
 
-    public void start() throws Exception {
+    public void start() throws InterruptedException {
         thread.start();
         lock.lock();
         while (loop == null) {

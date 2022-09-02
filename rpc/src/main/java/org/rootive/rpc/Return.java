@@ -7,6 +7,14 @@ public class Return {
         ParseException,
         InvocationException
     }
+
+    public Return() { }
+
+    public Return(Status stat, Object data) {
+        this.stat = (byte) stat.ordinal();
+        this.data = data;
+    }
+
     public byte stat;
     public Object data;
 }

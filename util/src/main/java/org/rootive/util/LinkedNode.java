@@ -1,4 +1,4 @@
-package org.rootive.gadgets;
+package org.rootive.util;
 
 import java.util.function.Predicate;
 
@@ -7,7 +7,6 @@ public class LinkedNode<T> {
     private LinkedNode<T> r;
     public T v;
 
-    public LinkedNode() {}
     public LinkedNode(T v) {
         this.v = v;
     }
@@ -16,12 +15,6 @@ public class LinkedNode<T> {
     }
     public LinkedNode<T> right() {
         return r;
-    }
-    public boolean hasLeft() {
-        return l != null;
-    }
-    public boolean hasRight() {
-        return r != null;
     }
     void lSplit() {
         if (l != null) {

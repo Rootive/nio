@@ -1,9 +1,10 @@
 import org.junit.Test;
 import org.rootive.log.Logger;
 import org.rootive.nio.EventLoopThread;
-import org.rootive.nio.RUDPConnection;
-import org.rootive.rpc.ClientStub;
 import org.rootive.rpc.Function;
+import org.rootive.rpc.Signature;
+
+import java.io.IOException;
 import java.net.InetSocketAddress;
 
 
@@ -31,10 +32,14 @@ public class Peer {
 
             Peer peer = new Peer();
             p.register("peer", peer);
-            p.register(f);
-            p.register(fs);
+            p.register("sayHelloWorld", f);
+            p.register("say", fs);
 
-            p.init(local);
+            try {
+                p.init(local);
+            } catch (IOException | InterruptedException ex) {
+                ex.printStackTrace();
+            }
         });
         et.start();
 
@@ -58,20 +63,22 @@ public class Peer {
 
             Peer peer = new Peer();
             yp.register("peer", peer);
-            yp.register(f);
-            yp.register(fs);
+            yp.register("sayHelloWorld", f);
+            yp.register("say", fs);
 
-            yp.init(local);
+            try {
+                yp.init(local);
+            } catch (IOException | InterruptedException ex) {
+                ex.printStackTrace();
+            }
         });
         et.start();
 
-        var invoker = ClientStub.func(fs).arg(ClientStub.sig(Peer.class, "peer"), ClientStub.sig(String.class, "address"));
-        yp.force(remote, invoker);
+        var functor = fs.newFunctor(new Signature(fs, "say"), new Signature(this, "peer"), new Signature(String.class, "address"));
+        yp.force(remote, functor);
 
-        System.out.println(new String(invoker.ret()));
+        System.out.println(functor.ret().toString());
 
-        Thread.sleep(5000);
-        yp.disconnect(remote);
         et.join();
     }
 

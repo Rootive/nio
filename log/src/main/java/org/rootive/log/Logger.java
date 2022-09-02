@@ -1,6 +1,6 @@
 package org.rootive.log;
 
-import org.rootive.gadgets.ByteBufferList;
+import org.rootive.util.ByteBufferList;
 
 import java.io.IOException;
 import java.io.OutputStream;

@@ -1,4 +1,4 @@
-package org.rootive.gadgets;
+package org.rootive.util;
 
 import java.util.ArrayList;
 
@@ -14,7 +14,7 @@ public class LoopThreadPool {
     public int count() {
         return threads.size();
     }
-    public void start() throws Exception {
+    public void start() throws InterruptedException {
         for (var th : threads) {
             th.start();
         }

@@ -1,10 +1,10 @@
-package org.rootive.gadgets;
+package org.rootive.util;
 
 public class Linked<T> {
     private LinkedNode<T> h;
     private LinkedNode<T> t;
 
-    public Linked() {}
+    public Linked() { }
     Linked(LinkedNode<T> h, LinkedNode<T> t) {
         this.h = h;
         this.t = t;

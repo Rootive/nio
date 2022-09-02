@@ -1,18 +1,16 @@
 package org.rootive.rpc;
 
-import org.rootive.gadgets.ByteBufferList;
+import org.rootive.util.ByteBufferList;
 
 import java.nio.ByteBuffer;
 
 public class Collector extends Gap {
     private boolean bDone;
     private final ByteBufferList semi = new ByteBufferList();
-    private ByteBufferList done = new ByteBufferList();
+    private final ByteBufferList done = new ByteBufferList();
 
     public ByteBufferList getDone() {
-        var ret = done;
-        done = new ByteBufferList();
-        return ret;
+        return done;
     }
 
     public void clear() {

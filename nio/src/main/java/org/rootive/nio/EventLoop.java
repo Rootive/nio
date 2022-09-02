@@ -10,17 +10,12 @@ import java.io.IOException;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class EventLoop {
-    @FunctionalInterface
-    public interface Runner {
-        void run() throws Exception;
-    }
-
     private static final int timeout = 10 * 1000;
     private final long threadId = Thread.currentThread().getId();
     private final AtomicBoolean bStarted = new AtomicBoolean();
-    private final AtomicBoolean bRunners = new AtomicBoolean();
-    private final ReentrantLock runnersLock = new ReentrantLock();
-    private LinkedList<Runner> runners = new LinkedList<>();
+    private final AtomicBoolean bRunnables = new AtomicBoolean();
+    private final ReentrantLock lock = new ReentrantLock();
+    private LinkedList<Runnable> runnables = new LinkedList<>();
     private Selector selector;
 
     public long getThreadId() {
@@ -54,43 +49,43 @@ public class EventLoop {
                 if (selector.select(timeout) > 0) {
                     var selectedKeys = selector.selectedKeys();
                     for (var k : selectedKeys) {
-                        try { ((org.rootive.nio.Handler) k.attachment()).handleEvent(); }
-                        catch (Exception e) { handleException(e); }
+                        ((Handler) k.attachment()).handleEvent();
                     }
                     selectedKeys.clear();
                 }
-            } catch (IOException e) { handleException(e); }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
-            bRunners.set(true);
+            bRunnables.set(true);
 
-            runnersLock.lock();
-            var another = runners;
-            runners = new LinkedList<>();
-            runnersLock.unlock();
+            lock.lock();
+            var another = runnables;
+            runnables = new LinkedList<>();
+            lock.unlock();
 
             for (var runner : another) {
-                try { runner.run(); }
-                catch (Exception e) { handleException(e); }
+                runner.run();
             }
-            bRunners.set(false);
+            bRunnables.set(false);
         }
     }
     public void stop() {
         bStarted.set(false);
         wakeup();
     }
-    public void run(Runner runner) throws Exception {
+    public void run(Runnable runnable) {
         if (isThread()) {
-            runner.run();
+            runnable.run();
         } else {
-            queue(runner);
+            queue(runnable);
         }
     }
-    public void queue(Runner runner) {
-        runnersLock.lock();
-        runners.add(runner);
-        runnersLock.unlock();
-        if (!isThread() || bRunners.get()) {
+    public void queue(Runnable runnable) {
+        lock.lock();
+        runnables.add(runnable);
+        lock.unlock();
+        if (!isThread() || bRunnables.get()) {
             wakeup();
         }
     }

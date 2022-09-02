@@ -1,8 +1,9 @@
 package org.rootive.nio;
 
-import org.rootive.gadgets.Linked;
-import org.rootive.gadgets.LoopThreadPool;
+import org.rootive.util.Linked;
+import org.rootive.util.LoopThreadPool;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -10,18 +11,11 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.HashMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class RUDPServer implements Handler {
-    @FunctionalInterface public interface ReadCallback {
-        void invoke(RUDPConnection c, Linked<ByteBuffer> l) throws Exception;
-    }
-    @FunctionalInterface public interface Callback {
-        void invoke(RUDPConnection c) throws Exception;
-    }
-    @FunctionalInterface public interface Runner {
-        void run(RUDPConnection c) throws Exception;
-    }
     static public class Send {
         public SocketAddress a;
         public ByteBuffer b;
@@ -31,8 +25,8 @@ public class RUDPServer implements Handler {
         }
     }
 
-    private ReadCallback readCallback;
-    private Callback disconnectCallback;
+    private BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback;
+    private Consumer<RUDPConnection> disconnectCallback;
 
     private DatagramChannel channel;
     private SelectionKey selectionKey;
@@ -49,17 +43,17 @@ public class RUDPServer implements Handler {
         threads = new LoopThreadPool(threadsCount);
     }
 
-    public void setDisconnectCallback(Callback disconnectCallback) {
+    public void setDisconnectCallback(Consumer<RUDPConnection> disconnectCallback) {
         this.disconnectCallback = disconnectCallback;
     }
-    public void setReadCallback(ReadCallback readCallback) {
+    public void setReadCallback(BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback) {
         this.readCallback = readCallback;
     }
     public void setContextSetter(Function<RUDPConnection, Object> contextSetter) {
         this.contextSetter = contextSetter;
     }
 
-    public void init(InetSocketAddress local) throws Exception {
+    public void init(InetSocketAddress local) throws InterruptedException, IOException {
         threads.start();
         channel = DatagramChannel.open();
         channel.configureBlocking(false);
@@ -67,7 +61,7 @@ public class RUDPServer implements Handler {
         selectionKey = eventLoop.add(channel, SelectionKey.OP_READ, this);
     }
 
-    public void connect(SocketAddress remote) throws Exception {
+    public void connect(SocketAddress remote) {
         eventLoop.run(() -> {
             var c = cs.get(remote);
             if (c == null) {
@@ -77,15 +71,15 @@ public class RUDPServer implements Handler {
             }
         });
     }
-    public void run(SocketAddress remote, Runner cr) throws Exception {
+    public void run(SocketAddress remote, Consumer<RUDPConnection> cr) {
         eventLoop.run(() -> {
             var c = cs.get(remote);
             if (c != null) {
-                cr.run(c);
+                cr.accept(c);
             }
         });
     }
-    public void force(SocketAddress remote, Runner cr) throws Exception {
+    public void force(SocketAddress remote, Consumer<RUDPConnection> cr) {
         eventLoop.run(() -> {
             var c = cs.get(remote);
             if (c == null) {
@@ -93,13 +87,13 @@ public class RUDPServer implements Handler {
                 c.connect();
                 cs.put(remote, c);
             }
-            cr.run(c);
+            cr.accept(c);
         });
     }
-    public void foreach(Runner cr) throws Exception {
+    public void foreach(Consumer<RUDPConnection> cr) {
         eventLoop.run(() -> cs.forEach((k, v) -> {
             try {
-                cr.run(v);
+                cr.accept(v);
             } catch (Exception e) {
                 eventLoop.handleException(e);
             }
@@ -115,17 +109,22 @@ public class RUDPServer implements Handler {
     }
 
     @Override
-    public void handleEvent() throws Exception {
+    public void handleEvent() {
         if (selectionKey.isReadable()) {
             handleRead();
         } else if (selectionKey.isWritable()) {
             handleWrite();
         }
     }
-    private void handleRead() throws Exception {
+    private void handleRead() {
         while (true) {
             ByteBuffer b = ByteBuffer.allocate(RUDPConnection.MTU);
-            var a = channel.receive(b);
+            SocketAddress a = null;
+            try {
+                a = channel.receive(b);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             if (a != null) {
                 b.flip();
                 var c = cs.get(a);
@@ -139,10 +138,14 @@ public class RUDPServer implements Handler {
             }
         }
     }
-    private void handleWrite() throws Exception {
+    private void handleWrite() {
         while (!unsent.isEmpty()) {
             var s = unsent.removeFirst();
-            channel.send(s.b, s.a);
+            try {
+                channel.send(s.b, s.a);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             if (s.b.remaining() > 0) {
                 unsent.addFirst(s);
                 break;
@@ -153,20 +156,24 @@ public class RUDPServer implements Handler {
         }
     }
 
-    private void onDisconnect(RUDPConnection c) throws Exception {
+    private void onDisconnect(RUDPConnection c) {
         eventLoop.run(() -> cs.remove(c.getRemote()));
-        disconnectCallback.invoke(c);
+        disconnectCallback.accept(c);
     }
-    private void onRead(RUDPConnection c, Linked<ByteBuffer> l) throws Exception {
+    private void onRead(RUDPConnection c, Linked<ByteBuffer> l) {
         if (readCallback != null) {
-            readCallback.invoke(c, l);
+            readCallback.accept(c, l);
         }
     }
-    private void transmission(SocketAddress a, ByteBuffer b) throws Exception {
+    private void transmission(SocketAddress a, ByteBuffer b) {
         eventLoop.run(() -> {
             var s = new Send(a, b);
             if (unsent.isEmpty()) {
-                channel.send(s.b, s.a);
+                try {
+                    channel.send(s.b, s.a);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
             if (s.b.remaining() > 0) {
                 unsent.addLast(s);

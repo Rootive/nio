@@ -1,4 +1,4 @@
-package org.rootive.gadgets;
+package org.rootive.util;
 
 import java.io.IOException;
 import java.io.InputStream;

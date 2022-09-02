@@ -1,24 +1,15 @@
-package org.rootive.gadgets;
+package org.rootive.util;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Loop {
-    @FunctionalInterface
-    public interface Runner {
-        void run() throws Exception;
-    }
-
     private final AtomicBoolean bStarted = new AtomicBoolean();
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition condition = lock.newCondition();
-    private Linked<Runner> runners = new Linked<>();
+    private Linked<Runnable> runnables = new Linked<>();
     private final long threadId = Thread.currentThread().getId();
-
-    private void handleException(Exception e) {
-        e.printStackTrace();
-    }
 
     public long getThreadId() {
         return threadId;
@@ -35,21 +26,17 @@ public class Loop {
         while (bStarted.get()) {
 
             lock.lock();
-            while (runners.isEmpty()) {
+            while (runnables.isEmpty()) {
                 try { condition.await(); }
-                catch (InterruptedException e) { handleException(e); }
+                catch (InterruptedException e) { e.printStackTrace(); }
             }
-            var tmp = runners;
-            runners = new Linked<>();
+            var another = runnables;
+            runnables = new Linked<>();
             lock.unlock();
 
-            var n = tmp.head();
+            var n = another.head();
             while (n != null) {
-                try {
-                    n.v.run();
-                } catch (Exception e) {
-                    handleException(e);
-                }
+                n.v.run();
                 n = n.right();
             }
 
@@ -61,13 +48,13 @@ public class Loop {
         condition.signal();
         lock.unlock();
     }
-    public void run(Runner runner) throws Exception {
-        if (isThread()) { runner.run(); }
-        else { queue(runner); }
+    public void run(Runnable runnable) {
+        if (isThread()) { runnable.run(); }
+        else { queue(runnable); }
     }
-    public void queue(Runner runner) {
+    public void queue(Runnable runnable) {
         lock.lock();
-        runners.addLast(runner);
+        runnables.addLast(runnable);
         condition.signal();
         lock.unlock();
     }

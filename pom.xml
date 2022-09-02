@@ -12,11 +12,8 @@
         <module>nio</module>
         <module>log</module>
         <module>rpc</module>
-        <module>Processor</module>
-        <module>annotation</module>
-        <module>test</module>
         <module>nio_rpc</module>
-        <module>gadgets</module>
+        <module>util</module>
         <module>http</module>
         <module>consensus</module>
         <module>p2p</module>

@@ -1,30 +1,27 @@
 package org.rootive.nio;
 
-import org.rootive.gadgets.ByteBufferList;
+import org.rootive.util.ByteBufferList;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.function.Consumer;
 
 public class TCPConnection implements Handler {
-
     public enum State {
         Disconnected, Connecting, Connected, Disconnecting
-    }
-    @FunctionalInterface
-    public interface Callback {
-        void accept(TCPConnection c) throws Exception;
     }
 
     private static final int bufferElementLength = 1024;
     private static final int hwm = 64 * 1024 * 1024;
 
-    private Callback connectionCallback;
-    private Callback readCallback;
-    private Callback writeFinishedCallback;
-    private Callback hwmCallback;
+    private Consumer<TCPConnection> connectionCallback;
+    private Consumer<TCPConnection> readCallback;
+    private Consumer<TCPConnection> writeFinishedCallback;
+    private Consumer<TCPConnection> hwmCallback;
 
     private final ByteBufferList readBuffers = new ByteBufferList();
     private final ByteBufferList writeBuffers = new ByteBufferList();
@@ -32,7 +29,7 @@ public class TCPConnection implements Handler {
     private SelectionKey selectionKey;
     private State state = State.Connecting;
     private EventLoop eventLoop;
-    private Object context;
+    public Object context;
 
     public TCPConnection(SocketChannel socketChannel){
         this.socketChannel = socketChannel;
@@ -45,41 +42,29 @@ public class TCPConnection implements Handler {
         return state;
     }
     public int getWriteBuffersRemaining() { return writeBuffers.totalRemaining(); }
-    public Object getContext() {
-        return context;
-    }
-    public void setContext(Object context) {
-        this.context = context;
-    }
 
-    public void setConnectionCallback(Callback connectionCallback) {
+    public void setConnectionCallback(Consumer<TCPConnection> connectionCallback) {
         this.connectionCallback = connectionCallback;
     }
-    public void setReadCallback(Callback readCallback) {
+    public void setReadCallback(Consumer<TCPConnection> readCallback) {
         this.readCallback = readCallback;
     }
-    public void setWriteFinishedCallback(Callback writeFinishedCallback) {
+    public void setWriteFinishedCallback(Consumer<TCPConnection> writeFinishedCallback) {
         this.writeFinishedCallback = writeFinishedCallback;
     }
-    public void setHwmCallback(Callback hwmCallback) {
+    public void setHwmCallback(Consumer<TCPConnection> hwmCallback) {
         this.hwmCallback = hwmCallback;
     }
 
-    @Override
-    public String toString() {
-        return socketChannel.socket().getInetAddress().toString()+
-                '@' + Integer.toHexString(hashCode());
-    }
     public SocketAddress getRemoteSocketAddress() {
         return socketChannel.socket().getRemoteSocketAddress();
     }
-    private void handleRead() throws Exception {
-        int res;
+    private void handleRead() {
+        int res = -1;
         try {
             res = readBuffers.readFrom(socketChannel, bufferElementLength);
         } catch (Exception e) {
-            forceDisconnect();
-            throw e;
+            e.printStackTrace();
         }
         if (res == -1) {
             handleClose();
@@ -87,9 +72,13 @@ public class TCPConnection implements Handler {
             readCallback.accept(this);
         }
     }
-    private void handleWrite() throws Exception {
+    private void handleWrite() {
         if (selectionKey.isWritable()) {
-            writeBuffers.writeTo(socketChannel);
+            try {
+                writeBuffers.writeTo(socketChannel);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             if (writeBuffers.totalRemaining() == 0) {
                 selectionKey.interestOpsAnd(~SelectionKey.OP_WRITE);
                 if (writeFinishedCallback != null) {
@@ -101,16 +90,21 @@ public class TCPConnection implements Handler {
             }
         }
     }
-    private void handleClose() throws Exception {
+    private void handleClose() {
         state = State.Disconnected;
         selectionKey.interestOpsAnd(0);
         selectionKey.cancel();
-        socketChannel.close();
+        try {
+            socketChannel.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         if (connectionCallback != null) {
             connectionCallback.accept(this);
         }
     }
-    public void handleEvent() throws Exception {
+    @Override
+    public void handleEvent() {
         if (selectionKey.isReadable()) {
             handleRead();
         } else if (selectionKey.isWritable()) {
@@ -118,15 +112,23 @@ public class TCPConnection implements Handler {
         }
     }
 
-    private void _disconnect() throws IOException {
+    private void _disconnect() {
         if (!selectionKey.isWritable()) {
-            socketChannel.shutdownOutput();
+            try {
+                socketChannel.shutdownOutput();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
-    private void _write(ByteBuffer _buffer) throws Exception {
+    private void _write(ByteBuffer _buffer) {
         ByteBuffer buffer = _buffer.duplicate();
         if (!selectionKey.isWritable() && writeBuffers.totalRemaining() == 0) {
-            socketChannel.write(buffer);
+            try {
+                socketChannel.write(buffer);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             if (buffer.remaining() == 0 && writeFinishedCallback != null) {
                 writeFinishedCallback.accept(this);
             }
@@ -142,47 +144,38 @@ public class TCPConnection implements Handler {
         }
     }
 
-    public void register(EventLoop eventLoop) throws Exception {
-        socketChannel.configureBlocking(false);
+    public void register(EventLoop eventLoop) {
+        try {
+            socketChannel.configureBlocking(false);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         this.eventLoop = eventLoop;
-        selectionKey = eventLoop.add(socketChannel, SelectionKey.OP_READ, this);
+        try {
+            selectionKey = eventLoop.add(socketChannel, SelectionKey.OP_READ, this);
+        } catch (ClosedChannelException e) {
+            e.printStackTrace();
+        }
         state = State.Connected;
         if (connectionCallback != null) {
             connectionCallback.accept(this);
         }
     }
-    public void disconnect() throws Exception {
+    public void disconnect() {
         if (state == State.Connected) {
             state = State.Disconnecting;
             eventLoop.run(this::_disconnect);
         }
     }
-    public void forceDisconnect() throws Exception {
+    public void forceDisconnect() {
         if (state == State.Connected || state == State.Disconnecting) {
             state = State.Disconnecting;
             eventLoop.run(this::handleClose);
         }
     }
-    public void write(ByteBuffer byteBuffer) throws Exception {
+    public void write(ByteBuffer byteBuffer) {
         if (state == State.Connected) {
             eventLoop.run(() -> _write(byteBuffer));
-        }
-    }
-    public void queueDisconnect() {
-        if (state == State.Connected) {
-            state = State.Disconnecting;
-            eventLoop.queue(this::_disconnect);
-        }
-    }
-    public void queueForceDisconnect() {
-        if (state == State.Connected || state == State.Disconnecting) {
-            state = State.Disconnecting;
-            eventLoop.queue(this::handleClose);
-        }
-    }
-    public void queueWrite(ByteBuffer byteBuffer) {
-        if (state == State.Connected) {
-            eventLoop.queue(() -> _write(byteBuffer));
         }
     }
 }

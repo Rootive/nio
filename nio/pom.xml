@@ -24,7 +24,7 @@
         </dependency>
         <dependency>
             <groupId>org.rootive</groupId>
-            <artifactId>gadgets</artifactId>
+            <artifactId>util</artifactId>
             <version>0.2</version>
         </dependency>
     </dependencies>

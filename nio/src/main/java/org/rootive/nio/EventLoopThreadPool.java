@@ -1,6 +1,7 @@
 package org.rootive.nio;
 
 import java.util.ArrayList;
+import java.util.function.Consumer;
 
 public class EventLoopThreadPool {
     private int last = -1;
@@ -15,7 +16,7 @@ public class EventLoopThreadPool {
     public ArrayList<EventLoopThread> getThreads() {
         return threads;
     }
-    public void setThreadInitFunction(EventLoopThread.ThreadInitFunction threadInitFunction) {
+    public void setThreadInitFunction(Consumer<EventLoop> threadInitFunction) {
         for (var th : threads) {
             th.setThreadInitFunction(threadInitFunction);
         }
@@ -24,7 +25,7 @@ public class EventLoopThreadPool {
         return threads.size();
     }
 
-    public void start() throws Exception {
+    public void start() throws InterruptedException {
         for (var th : threads) {
             th.start();
         }

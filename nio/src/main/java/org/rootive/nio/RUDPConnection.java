@@ -1,7 +1,7 @@
 package org.rootive.nio;
 
-import org.rootive.gadgets.Linked;
-import org.rootive.gadgets.Loop;
+import org.rootive.util.Linked;
+import org.rootive.util.Loop;
 import org.rootive.log.LogLine;
 import org.rootive.log.Logger;
 
@@ -11,18 +11,10 @@ import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public class RUDPConnection {
-    @FunctionalInterface public interface Callback {
-        void invoke(RUDPConnection c) throws Exception;
-    }
-    @FunctionalInterface public interface ReadCallback {
-        void invoke(RUDPConnection c, Linked<ByteBuffer> l) throws Exception;
-    }
-    @FunctionalInterface public interface Transmission {
-        void accept(SocketAddress a, ByteBuffer b) throws Exception;
-    }
-
     static public class Datagram {
         public int c;
         public ByteBuffer b;
@@ -58,11 +50,11 @@ public class RUDPConnection {
     private final SocketAddress remote;
     private final Loop loop;
 
-    private final Transmission transmission;
-    private ReadCallback readCallback;
-    private Callback connectCallback;
-    private Callback disconnectCallback;
-    private Callback flushedCallback;
+    private final BiConsumer<SocketAddress, ByteBuffer> transmission;
+    private BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback;
+    private Consumer<RUDPConnection> connectCallback;
+    private Consumer<RUDPConnection> disconnectCallback;
+    private Consumer<RUDPConnection> flushedCallback;
 
     private final ScheduledThreadPoolExecutor timers;
     private ScheduledFuture<?> heartbeatFuture;
@@ -81,7 +73,7 @@ public class RUDPConnection {
 
     public Object context;
 
-    public RUDPConnection(SocketAddress remote, Loop loop, Transmission transmission, ScheduledThreadPoolExecutor timers) {
+    public RUDPConnection(SocketAddress remote, Loop loop, BiConsumer<SocketAddress, ByteBuffer> transmission, ScheduledThreadPoolExecutor timers) {
         this.remote = remote;
         this.loop = loop;
         this.transmission = transmission;
@@ -91,29 +83,20 @@ public class RUDPConnection {
     public SocketAddress getRemote() {
         return remote;
     }
-    public void setReadCallback(ReadCallback readCallback) {
+    public void setReadCallback(BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback) {
         this.readCallback = readCallback;
     }
-    public void setConnectCallback(Callback connectCallback) {
+    public void setConnectCallback(Consumer<RUDPConnection> connectCallback) {
         this.connectCallback = connectCallback;
     }
-    public void setDisconnectCallback(Callback disconnectCallback) {
+    public void setDisconnectCallback(Consumer<RUDPConnection> disconnectCallback) {
         this.disconnectCallback = disconnectCallback;
     }
-    public void setFlushedCallback(Callback flushedCallback) {
+    public void setFlushedCallback(Consumer<RUDPConnection> flushedCallback) {
         this.flushedCallback = flushedCallback;
     }
 
-    public static ByteBuffer newByteBuffer(int c) {
-        var buffer = ByteBuffer.allocate(c + headerSize);
-        return buffer.slice(headerSize, c);
-    }
-    public static ByteBuffer newByteBuffer() {
-        var buffer = ByteBuffer.allocate(MTU);
-        return buffer.slice(headerSize, MTU - headerSize);
-    }
-
-    void handleReceive(ByteBuffer b) throws Exception {
+    void handleReceive(ByteBuffer b) {
         loop.run(() -> {
             if (state == State.Disconnected) {
                 return;
@@ -151,7 +134,7 @@ public class RUDPConnection {
         });
     }
 
-    private void doUnsent() throws Exception {
+    private void doUnsent() {
         if (bFlushing || state != State.Connected) {
             return;
         }
@@ -207,7 +190,7 @@ public class RUDPConnection {
         }, period, period, TimeUnit.MILLISECONDS);
     }
 
-    public void connect() throws Exception {
+    public void connect() {
         loop.run(() -> {
             clear();
             state = State.Connecting;
@@ -229,7 +212,7 @@ public class RUDPConnection {
             }, 0, connectPeriod, TimeUnit.MILLISECONDS);
         });
     }
-    private void doConnect() throws Exception {
+    private void doConnect() {
         if (state != State.Connecting) {
             return;
         }
@@ -237,18 +220,18 @@ public class RUDPConnection {
 
         LogLine.begin(Logger.Level.Info).log(remote + " " + state).end();
         if (connectCallback != null) {
-            connectCallback.invoke(this);
+            connectCallback.accept(this);
         }
 
         if (!unsent.isEmpty()) {
             doUnsent();
         }
     }
-    private void handleConnect() throws Exception {
+    private void handleConnect() {
         connectConfirm();
         doConnect();
     }
-    private void connectConfirm() throws Exception {
+    private void connectConfirm() {
         ByteBuffer b = ByteBuffer.allocate(checkSize + operatorSize);
         b.put(check);
         b.put((byte) Operator.ConnectConfirm.ordinal());
@@ -256,10 +239,10 @@ public class RUDPConnection {
         transmission.accept(remote, b);
         setHeartbeat();
     }
-    private void handleConnectConfirm() throws Exception {
+    private void handleConnectConfirm() {
         doConnect();
     }
-    public void message(ByteBuffer b) throws Exception {
+    public void message(ByteBuffer b) {
         loop.run(() -> {
             if (state != State.Connected && state != State.Connecting) {
                 return;
@@ -276,13 +259,13 @@ public class RUDPConnection {
             doUnsent();
         });
     }
-    private void handleMessage(int c, ByteBuffer b) throws Exception {
+    private void handleMessage(int c, ByteBuffer b) {
         if (state != State.Connected) {
             return;
         }
         messageConfirm(c, b);
     }
-    private void messageConfirm(int c, ByteBuffer b) throws Exception {
+    private void messageConfirm(int c, ByteBuffer b) {
         ByteBuffer cb = ByteBuffer.allocate(headerSize);
         cb.put(check);
         cb.put((byte) Operator.MessageConfirm.ordinal());
@@ -326,10 +309,10 @@ public class RUDPConnection {
         }
 
         if (!ready.isEmpty() && readCallback != null) {
-            readCallback.invoke(this, ready);
+            readCallback.accept(this, ready);
         }
     }
-    private void handleMessageConfirm(int c) throws Exception {
+    private void handleMessageConfirm(int c) {
         if (state != State.Connected) {
             return;
         }
@@ -345,7 +328,7 @@ public class RUDPConnection {
                     }
                     if (flushedCallback != null) {
                         LogLine.begin(Logger.Level.Info).log("flushed " + remote).end();
-                        flushedCallback.invoke(this);
+                        flushedCallback.accept(this);
                     }
                     if (!unsent.isEmpty()) {
                         doUnsent();
@@ -359,7 +342,7 @@ public class RUDPConnection {
         }
     }
 
-    public void disconnect() throws Exception {
+    public void disconnect() {
         loop.run(() -> {
             if (state == State.Disconnected || state == State.Disconnecting) {
                 return;
@@ -380,7 +363,7 @@ public class RUDPConnection {
             }, 0, connectPeriod, TimeUnit.MILLISECONDS);
         });
     }
-    public void forceDisconnect() throws Exception {
+    public void forceDisconnect() {
         loop.run(() -> {
             if (state == State.Disconnected) {
                 return;
@@ -394,7 +377,7 @@ public class RUDPConnection {
 
         });
     }
-    private void handleDisconnect() throws Exception {
+    private void handleDisconnect() {
         disconnectConfirm();
         doDisconnect();
     }
@@ -406,10 +389,10 @@ public class RUDPConnection {
         loop.queue(() -> transmission.accept(remote, b));
         setHeartbeat();
     }
-    private void handleDisconnectConfirm() throws Exception {
+    private void handleDisconnectConfirm() {
         doDisconnect();
     }
-    private void doDisconnect() throws Exception {
+    private void doDisconnect() {
         state = State.Disconnected;
         if (missFuture != null) {
             missFuture.cancel(false);
@@ -423,12 +406,12 @@ public class RUDPConnection {
 
         LogLine.begin(Logger.Level.Info).log(remote + " " + state).end();
         if (disconnectCallback != null) {
-            disconnectCallback.invoke(this);
+            disconnectCallback.accept(this);
         }
     }
 
 
-    public void flush() throws Exception {
+    public void flush() {
         loop.run(() -> {
             if (state != State.Connected) {
                 return;

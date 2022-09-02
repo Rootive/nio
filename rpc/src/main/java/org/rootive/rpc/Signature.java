@@ -12,7 +12,7 @@ public class Signature implements Actor {
         return obj.getClass().getName();
     }
     public static String namespaceStringOf(Function function) {
-        return namespaceStringOf(function.getParameterClasses().get(0));
+        return function.getObjectClass().getName();
     }
 
     public Signature(String namespaceString, String identifier) {
