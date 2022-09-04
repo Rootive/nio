@@ -6,20 +6,20 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="consensus" />
+        <module name="nio_rpc" />
         <module name="util" />
         <module name="rpc" />
         <module name="nio" />
-        <module name="log" />
-        <module name="nio_rpc" />
-        <module name="http" />
         <module name="p2p" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="annotation" target="17" />
       <module name="Consensus" target="17" />
+      <module name="consensus" target="17" />
       <module name="HTTP" target="17" />
+      <module name="http" target="17" />
+      <module name="log" target="17" />
       <module name="processor" target="17" />
       <module name="test" target="17" />
       <module name="untitled" target="17" />

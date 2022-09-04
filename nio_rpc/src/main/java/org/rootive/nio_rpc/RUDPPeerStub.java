@@ -11,31 +11,40 @@ public class RUDPPeerStub {
 
     private final ServerStub stub;
     private final RUDPTransmission transmission;
-    private final Collector collector = new Collector();
+    private Collector collector = new Collector();
 
-    public RUDPPeerStub(ServerStub p, RUDPConnection connection) {
-        stub = new ServerStub(p, connection::message);
+    public RUDPPeerStub(ServerStub parent, RUDPConnection connection) {
+        stub = new ServerStub(parent, (d) -> {
+            connection.message(d);
+            connection.flush();
+        });
         transmission = new RUDPTransmission(connection);
-        stub.register(String.class, "address", connection.getRemote().toString());
+
+        stub.register(String.class, "address", connection.getRemote().toString().substring(1));
     }
 
-    public BiConsumer<ByteBuffer, Functor> getTransmission() {
+    public BiConsumer<ByteBuffer, Return> getTransmission() {
         return transmission::send;
+    }
+    public void setDispatcher(BiConsumer<String, Runnable> dispatcher) {
+        stub.setDispatcher(dispatcher);
     }
 
     public void handleReceived(Linked<ByteBuffer> bs) {
         while (!bs.isEmpty()) {
             if (collector.collect(bs.removeFirst())) {
-                if (collector.getContext() == Gap.Context.Return) {
-                    transmission.handle(collector);
+                var clone = collector;
+                collector = new Collector();
+
+                if (clone.getContext() == Gap.Context.Return) {
+                    transmission.handleReceived(clone);
                 } else {
-                    stub.run(collector);
+                    stub.handleReceived(clone);
                 }
-                collector.clear();
             }
         }
     }
-    public void disconnect() {
+    public void drop() {
         transmission.drop("dropped and not sent because connection disconnected");
     }
 

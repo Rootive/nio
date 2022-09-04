@@ -3,6 +3,7 @@ package org.rootive.nio;
 import org.rootive.log.LogLine;
 import org.rootive.log.Logger;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
 import java.util.function.Consumer;
@@ -49,7 +50,13 @@ public class TCPServer {
         connection.setReadCallback(this::onRead);
         connection.setWriteFinishedCallback(this::onWriteFinished);
         connection.setHwmCallback(this::onHwm);
-        e.run(() -> connection.register(e));
+        e.run(() -> {
+            try {
+                connection.register(e);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        });
     }
     private void onConnection(TCPConnection connection) {
         LogLine.begin(Logger.Level.Info).log(connection.toString() + ": " + connection.getState()).end();

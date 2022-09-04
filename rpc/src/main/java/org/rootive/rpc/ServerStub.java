@@ -4,11 +4,12 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.rootive.util.ByteBufferList;
+import org.rootive.util.LinkedByteBuffer;
 
 public class ServerStub {
     static private final ByteBuffer doneGap = Gap.get(Return.Status.Done);
@@ -41,41 +42,49 @@ public class ServerStub {
                 .reset();
     }
 
+    static private record Entry(Object object, boolean bProtected) { }
+
     private final ServerStub parent;
-    private final HashMap<String, HashMap<String, Object>> map = new HashMap<>();
+    private final HashMap<String, HashMap<String, Entry>> map = new HashMap<>();
     private final Consumer<ByteBuffer> transmission;
+    private BiConsumer<String, Runnable> dispatcher = (n, r) -> r.run();
 
     public ServerStub(ServerStub parent, Consumer<ByteBuffer> transmission) {
         this.parent = parent;
         this.transmission = transmission;
     }
 
-    public void registerNamespace(String namespaceString, HashMap<String, Object> m) {
+    public void setDispatcher(BiConsumer<String, Runnable> dispatcher) {
+        this.dispatcher = dispatcher;
+    }
+
+    public void registerNamespace(String namespaceString, HashMap<String, Entry> m) {
         map.put(namespaceString, m);
     }
-    public void registerNamespace(Class<?> namespaceString, HashMap<String, Object> m) {
+    public void registerNamespace(Class<?> namespaceString, HashMap<String, Entry> m) {
         map.put(Signature.namespaceStringOf(namespaceString), m);
     }
-    public void register(String namespaceString, String identifier, Object obj) {
+    public void register(String namespaceString, String identifier, Object object, boolean bProtected) {
         var namespace = map.get(namespaceString);
         if (namespace != null) {
-            namespace.put(identifier, obj);
+            namespace.put(identifier, new Entry(object, bProtected));
         } else {
             namespace = new HashMap<>();
-            namespace.put(identifier, obj);
+            namespace.put(identifier, new Entry(object, bProtected));
             registerNamespace(namespaceString, namespace);
         }
     }
-    public void register(Class<?> namespaceString, String identifier, Object obj) {
-        register(Signature.namespaceStringOf(namespaceString), identifier, obj);
+    public void register(Class<?> namespaceString, String identifier, Object object) {
+        register(Signature.namespaceStringOf(namespaceString), identifier, object, true);
     }
-    public void register(String identifier, Object obj) {
-        register(Signature.namespaceStringOf(obj), identifier, obj);
+    public void register(String identifier, Object object) {
+        register(Signature.namespaceStringOf(object), identifier, object, true);
     }
     public void register(String identifier, Function f) {
-        register(Signature.namespaceStringOf(f), identifier, f);
+        register(Signature.namespaceStringOf(f), identifier, f, true);
     }
-    public HashMap<String, Object> getNamespace(String namespaceString) {
+
+    private HashMap<String, Entry> getNamespace(String namespaceString) {
         var ret = map.get(namespaceString);
         if (ret == null && parent != null) {
             ret = parent.getNamespace(namespaceString);
@@ -85,7 +94,7 @@ public class ServerStub {
         }
         return ret;
     }
-    public Object get(String namespaceString, String identifier) {
+    private Entry get(String namespaceString, String identifier) {
         var namespace = getNamespace(namespaceString);
         if (namespace != null) {
             return namespace.get(identifier);
@@ -93,7 +102,7 @@ public class ServerStub {
         return null;
     }
 
-    private Object parse(ByteBufferList ds, Class<?> context) throws ParseException, InvocationException {
+    private Object parse(LinkedByteBuffer ds, Class<?> expect, String context) throws ParseException, InvocationException {
         var d = ds.removeFirst();
         var t = d.get();
         if (t < 0 || t >= Type.values().length) {
@@ -104,19 +113,23 @@ public class ServerStub {
             case Signature -> {
                 var sig = new String(d.array(), d.arrayOffset() + d.position(), d.remaining());
                 var space = sig.indexOf(' ');
-                var o = get(sig.substring(0, space), sig.substring(space + 1));
-                if (o == null) {
+                var namespace = sig.substring(0, space);
+                var entry = get(namespace, sig.substring(space + 1));
+                if (entry == null) {
                     throw new ParseException(sig + " refer to null");
                 }
-                if (o instanceof Function f) {
+                if (entry.bProtected && !namespace.equals(context)) {
+                    throw new ParseException(sig + " reject");
+                }
+                if (entry.object instanceof Function f) {
                     var pcs = f.getParameterClasses();
                     if (ds.count() <= pcs.length) {
                         throw new ParseException("expect more parameters");
                     }
-                    Object po = parse(ds, f.getObjectClass());
+                    Object po = parse(ds, f.getObjectClass(), context);
                     Object[] ps = new Object[pcs.length];
                     for (var _i = 0; _i < ps.length; ++_i) {
-                        ps[_i] = parse(ds, pcs[_i]);
+                        ps[_i] = parse(ds, pcs[_i], context);
                     }
                     try {
                         ret = f.invoke(po, ps);
@@ -126,7 +139,7 @@ public class ServerStub {
                         throw new ParseException(e.getMessage());
                     }
                 } else {
-                    ret = o;
+                    ret = entry.object;
                 }
             }
             case Bytes -> {
@@ -136,7 +149,7 @@ public class ServerStub {
             case Literal -> {
                 var s = new String(d.array(), d.arrayOffset() + d.position(), d.remaining());
                 try {
-                    ret = new ObjectMapper().readValue(s, context);
+                    ret = new ObjectMapper().readValue(s, expect);
                 } catch (IOException e) {
                     throw new ParseException("parse json: " + s + " failed");
                 }
@@ -145,48 +158,48 @@ public class ServerStub {
         return ret;
     }
 
-    public void run(Collector c) {
-        var ds = c.getDone();
+    public void handleSignature(Collector c, String namespace) {
+        ByteBuffer res = null, gap;
+        try {
+            var o = parse(c.getDone(), null, namespace);
+            if (o instanceof byte[] bs && c.getContext() == Gap.Context.CallBytes) {
+                res = single(bs, Type.Bytes);
+            } else {
+                res = single(new ObjectMapper().writeValueAsBytes(o), Type.Literal);
+            }
+            gap = doneGap();
+        } catch (ParseException | JsonProcessingException e) {
 
-        ByteBuffer res;
-        ByteBuffer gap;
-        if (ds.head().get() == Type.Signature.ordinal()) {
-            try {
-                var o = parse(ds, null);
-                if (o instanceof byte[] bs && c.getContext() == Gap.Context.CallBytes) {
-                    res = single(bs, Type.Bytes);
-                } else {
-                    res = single(new ObjectMapper().writeValueAsBytes(o), Type.Literal);
-                }
-                gap = doneGap();
-            } catch (ParseException | JsonProcessingException e) {
-                try {
-                    res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal);
-                } catch (JsonProcessingException ex) {
-                    res = single(new byte[0], Type.Bytes);
-                    ex.printStackTrace();
-                }
-                gap = parseExceptionGap();
-            } catch (InvocationException e) {
-                try {
-                    res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal);
-                } catch (JsonProcessingException ex) {
-                    res = single(new byte[0], Type.Bytes);
-                    ex.printStackTrace();
-                }
-                gap = invocationExceptionGap();
-            }
-        } else {
-            try {
-                res = single(new ObjectMapper().writeValueAsBytes("expect signature here"), Type.Literal);
-            } catch (JsonProcessingException e) {
-                res = single(new byte[0], Type.Bytes);
-                e.printStackTrace();
-            }
+            try { res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal); }
+            catch (JsonProcessingException ex) { assert false; }
             gap = parseExceptionGap();
+
+        } catch (InvocationException e) {
+
+            try { res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal); }
+            catch (JsonProcessingException ex) { assert false; }
+            gap = invocationExceptionGap();
+
         }
         transmission.accept(res);
         transmission.accept(gap);
+    }
+    public void handleReceived(Collector c) {
+        var d = c.getDone().head();
+        if (d.get() == Type.Signature.ordinal()) {
+            var sig = new String(d.array(), d.arrayOffset() + d.position(), d.remaining());
+            var namespace = sig.substring(0, sig.indexOf(' '));
+            dispatcher.accept(namespace, () -> handleSignature(c, namespace));
+        } else {
+
+            ByteBuffer res = null, gap;
+            try { res = single(new ObjectMapper().writeValueAsBytes("expect signature here"), Type.Literal); }
+            catch (JsonProcessingException e) { assert false; }
+            gap = parseExceptionGap();
+            transmission.accept(res);
+            transmission.accept(gap);
+
+        }
     }
 
 }

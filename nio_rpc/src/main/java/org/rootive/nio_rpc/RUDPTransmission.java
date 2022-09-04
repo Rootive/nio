@@ -12,7 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class RUDPTransmission {
     private final RUDPConnection connection;
-    private final Queue<Functor> queue = new LinkedList<>();
+    private final Queue<Return> queue = new LinkedList<>();
     private final ReentrantLock queueLock = new ReentrantLock();
 
     public RUDPTransmission(RUDPConnection c) {
@@ -23,7 +23,7 @@ public class RUDPTransmission {
         return connection;
     }
 
-    public void send(ByteBuffer data, Functor f) {
+    public void send(ByteBuffer data, Return f) {
         if (f != null) {
             queueLock.lock();
             queue.add(f);
@@ -32,18 +32,17 @@ public class RUDPTransmission {
         connection.message(data);
         connection.flush();
     }
-    public void handle(Collector collector) {
-        Functor f;
+    public void handleReceived(Collector collector) {
+        Return ret;
         queueLock.lock();
-        f = queue.remove();
+        ret = queue.remove();
         queueLock.unlock();
-        f.setReturn(collector);
+        ret.set(collector);
     }
     public void drop(String msg) {
-        var res = new Return(Return.Status.TransmissionException, msg);
         queueLock.lock();
         while (queue.size() > 0) {
-            queue.remove().setReturn(res);
+            queue.remove().set(Return.Status.TransmissionException, msg);
         }
         queueLock.unlock();
     }

@@ -6,7 +6,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ByteChannel;
 
-public class ByteBufferList {
+public class LinkedByteBuffer {
     private final Linked<ByteBuffer> linked = new Linked<>();
     private int remaining;
     private int count;

@@ -1,7 +1,6 @@
 package org.rootive.nio;
 
 import org.rootive.util.Linked;
-import org.rootive.util.Loop;
 import org.rootive.log.LogLine;
 import org.rootive.log.Logger;
 

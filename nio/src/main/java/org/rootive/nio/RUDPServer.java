@@ -1,7 +1,6 @@
 package org.rootive.nio;
 
 import org.rootive.util.Linked;
-import org.rootive.util.LoopThreadPool;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -37,9 +36,9 @@ public class RUDPServer implements Handler {
     private final HashMap<SocketAddress, RUDPConnection> cs = new HashMap<>();
     private Function<RUDPConnection, Object> contextSetter = (c) -> null;
 
-    public RUDPServer(ScheduledThreadPoolExecutor timers, EventLoop eventLoop, int threadsCount) {
-        this.timers = timers;
+    public RUDPServer(EventLoop eventLoop, int timersCount, int threadsCount) {
         this.eventLoop = eventLoop;
+        timers = new ScheduledThreadPoolExecutor(timersCount);
         threads = new LoopThreadPool(threadsCount);
     }
 
@@ -91,13 +90,7 @@ public class RUDPServer implements Handler {
         });
     }
     public void foreach(Consumer<RUDPConnection> cr) {
-        eventLoop.run(() -> cs.forEach((k, v) -> {
-            try {
-                cr.accept(v);
-            } catch (Exception e) {
-                eventLoop.handleException(e);
-            }
-        }));
+        eventLoop.run(() -> cs.forEach((k, v) -> cr.accept(v)));
     }
 
     private RUDPConnection newConnection(SocketAddress a) {

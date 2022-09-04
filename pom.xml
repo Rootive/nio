@@ -10,12 +10,9 @@
     <version>0.2</version>
     <modules>
         <module>nio</module>
-        <module>log</module>
         <module>rpc</module>
         <module>nio_rpc</module>
         <module>util</module>
-        <module>http</module>
-        <module>consensus</module>
         <module>p2p</module>
     </modules>
 

@@ -1,14 +1,25 @@
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Test;
 import org.rootive.log.Logger;
 import org.rootive.nio.EventLoopThread;
+import org.rootive.p2p.RUDPPeer;
 import org.rootive.rpc.Function;
 import org.rootive.rpc.Signature;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
 
 public class Peer {
+    public record RT(int i, String s) { }
+
+    @Test
+    public void a() throws JsonProcessingException {
+        RT rt = new RT(1, "asd");
+        System.out.println(new ObjectMapper().writeValueAsString(rt));
+    }
 
     public String sayHelloWorld() {
         System.out.println("Hello, world.");
@@ -19,16 +30,18 @@ public class Peer {
         return s;
     }
 
+    RUDPPeer p;
     @Test
     public void x() throws Exception {
         Logger.start(Logger.Level.All, System.out);
         var local = new InetSocketAddress(45555);
+        var remote = new InetSocketAddress("127.0.0.1", 45556);
         Function f = new Function(Peer.class, Peer.class.getMethod("sayHelloWorld"));
         Function fs = new Function(Peer.class, Peer.class.getMethod("say", String.class));
 
         EventLoopThread et = new EventLoopThread();
         et.setThreadInitFunction((e) -> {
-            RUDPPeer p = new RUDPPeer(e, 1, 1);
+            p = new RUDPPeer(e, 1, 1);
 
             Peer peer = new Peer();
             p.register("peer", peer);
@@ -43,7 +56,10 @@ public class Peer {
         });
         et.start();
 
-
+        Thread.sleep(5000);
+        var functor = fs.newFunctor(new Signature(fs, "say"), new Signature(this, "peer"), new Signature(String.class, "address"));
+        p.force(remote, functor);
+        System.out.println(functor.ret().toString());
 
         et.join();
     }

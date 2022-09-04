@@ -1,4 +1,6 @@
-package org.rootive.util;
+package org.rootive.nio;
+
+import org.rootive.util.Linked;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;

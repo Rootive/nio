@@ -28,9 +28,6 @@ public class EventLoop {
     private void wakeup() {
         selector.wakeup();
     }
-    void handleException(Exception e) {
-        e.printStackTrace();
-    }
 
     public SelectionKey add(SelectableChannel c, int ops, Handler h) throws ClosedChannelException {
         var ret = c.register(selector, ops);
