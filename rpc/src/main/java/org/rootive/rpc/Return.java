@@ -8,31 +8,26 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Return {
-    public enum Status {
-        Done,
-        TransmissionException,
-        ParseException,
-        InvocationException
-    }
-
-    private byte stat;
-    private Object data;
     private Function function;
-    private final ReentrantLock lock = new ReentrantLock();
-    private final Condition condition = lock.newCondition();
+    private long check;
     private boolean bSet;
 
-    public Return() { }
-    public Return(Function function) {
-        this.function = function;
-    }
+    private Gap.Context ctx;
+    private Object data;
+    private final ReentrantLock lock = new ReentrantLock();
+    private final Condition condition = lock.newCondition();
 
-    public void clear(Function function) {
+    public void clear(Function function, long check) {
         this.function = function;
+        this.check = check;
         bSet = false;
     }
-    public void set(Status stat, Object data) {
-        this.stat = (byte) stat.ordinal();
+    public long getCheck() {
+        return check;
+    }
+
+    public void set(Gap.Context ctx, Object data) {
+        this.ctx = ctx;
         this.data = data;
 
         lock.lock();
@@ -41,15 +36,19 @@ public class Return {
         lock.unlock();
     }
     public void set(Collector collector) {
-        stat = collector.getStatus();
-
+        ctx = collector.getContext();
         var d = collector.getDone().removeFirst();
         if (d.get() == Type.Literal.ordinal()) {
             try {
-                data = new ObjectMapper().readValue(new String(d.array(), d.arrayOffset() + d.position(), d.remaining()), function.getReturnClass());
+                var s = new String(d.array(), d.arrayOffset() + d.position(), d.remaining());
+                if (ctx == Gap.Context.Return) {
+                    data = new ObjectMapper().readValue(s, function.getReturnClass());
+                } else {
+                    data = new ObjectMapper().readValue(s, String.class);
+                }
             } catch (JsonProcessingException e) {
-                data = e.getMessage() + " the origin status: " + stat;
-                stat = (byte) Return.Status.ParseException.ordinal();
+                data = e.getMessage();
+                ctx = Gap.Context.ParseException;
             }
         } else {
             data = new byte[d.remaining()];
@@ -68,11 +67,7 @@ public class Return {
         }
         lock.unlock();
 
-        if (stat < 0 || stat >= Return.Status.values().length) {
-            throw new ParseException("unrecognized status: " + stat);
-        }
-
-        switch (Return.Status.values()[stat]) {
+        switch (ctx) {
             case TransmissionException -> throw new TransmissionException(data.toString());
             case ParseException -> throw new ParseException(data.toString());
             case InvocationException -> throw new InvocationException(data.toString());
@@ -83,7 +78,7 @@ public class Return {
     public boolean wait(int timeout) throws InterruptedException {
         boolean ret = true;
         lock.lock();
-        while (!bSet) {
+        if (!bSet) {
             ret = condition.await(timeout, TimeUnit.MILLISECONDS);
         }
         lock.unlock();

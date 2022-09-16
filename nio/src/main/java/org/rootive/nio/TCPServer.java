@@ -1,8 +1,4 @@
 package org.rootive.nio;
-
-import org.rootive.log.LogLine;
-import org.rootive.log.Logger;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
@@ -59,7 +55,7 @@ public class TCPServer {
         });
     }
     private void onConnection(TCPConnection connection) {
-        LogLine.begin(Logger.Level.Info).log(connection.toString() + ": " + connection.getState()).end();
+        System.out.println(connection.toString() + ": " + connection.getState());
         if (connectionCallback != null) {
             connectionCallback.accept(connection);
         }
@@ -70,10 +66,10 @@ public class TCPServer {
         }
     }
     private void onWriteFinished(TCPConnection connection) {
-        LogLine.begin(Logger.Level.Info).log(connection.toString() + ": write finished").end();
+        System.out.println(connection.toString() + ": write finished");
     }
     private void onHwm(TCPConnection connection) {
-        LogLine.begin(Logger.Level.Info).log(connection.toString() + ": high-water mark " + connection.getWriteBuffersRemaining()).end();
+        System.out.println(connection.toString() + ": high-water mark " + connection.getWriteBuffersRemaining());
         connection.forceDisconnect();
     }
 }

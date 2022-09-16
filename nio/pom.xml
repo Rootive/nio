@@ -19,11 +19,6 @@
     <dependencies>
         <dependency>
             <groupId>org.rootive</groupId>
-            <artifactId>log</artifactId>
-            <version>0.2</version>
-        </dependency>
-        <dependency>
-            <groupId>org.rootive</groupId>
             <artifactId>util</artifactId>
             <version>0.2</version>
         </dependency>

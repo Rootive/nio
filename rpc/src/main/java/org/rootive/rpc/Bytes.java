@@ -6,11 +6,7 @@ public class Bytes implements Actor {
     private final ByteBuffer data;
 
     public Bytes(byte[] bytes) {
-        data = ByteBuffer.allocate(bytes.length + Constexpr.headerSize)
-                .putInt(bytes.length)
-                .put((byte) Type.Bytes.ordinal())
-                .put(bytes)
-                .flip();
+        data = Util.single(bytes, Type.Bytes);
     }
 
     public ByteBuffer getData() {

@@ -1,7 +1,8 @@
 package org.rootive.nio_rpc;
 
+import org.rootive.nio.rudp.RUDPConnection;
+import org.rootive.nio.rudp.RUDPPieces;
 import org.rootive.util.Linked;
-import org.rootive.nio.RUDPConnection;
 import org.rootive.rpc.*;
 
 import java.nio.ByteBuffer;
@@ -9,25 +10,22 @@ import java.util.function.BiConsumer;
 
 public class RUDPPeerStub {
 
-    private final ServerStub stub;
-    private final RUDPTransmission transmission;
+    private final ServerStub serverStub;
+    private final RUDPClientStub clientStub;
     private Collector collector = new Collector();
 
     public RUDPPeerStub(ServerStub parent, RUDPConnection connection) {
-        stub = new ServerStub(parent, (d) -> {
-            connection.message(d);
-            connection.flush();
-        });
-        transmission = new RUDPTransmission(connection);
+        serverStub = new ServerStub(parent, (d) -> connection.message(new RUDPPieces(d)));
+        clientStub = new RUDPClientStub(connection);
 
-        stub.register(String.class, "address", connection.getRemote().toString().substring(1));
+        serverStub.register(Signature.namespaceStringOf(String.class), "address", connection.getRemote().toString().substring(1), false);
     }
 
-    public BiConsumer<ByteBuffer, Return> getTransmission() {
-        return transmission::send;
+    public RUDPClientStub getClientStub() {
+        return clientStub;
     }
     public void setDispatcher(BiConsumer<String, Runnable> dispatcher) {
-        stub.setDispatcher(dispatcher);
+        serverStub.setDispatcher(dispatcher);
     }
 
     public void handleReceived(Linked<ByteBuffer> bs) {
@@ -36,16 +34,16 @@ public class RUDPPeerStub {
                 var clone = collector;
                 collector = new Collector();
 
-                if (clone.getContext() == Gap.Context.Return) {
-                    transmission.handleReceived(clone);
+                if (clone.getContext().compareTo(Gap.Context.Return) >= 0) {
+                    clientStub.handleReceived(clone);
                 } else {
-                    stub.handleReceived(clone);
+                    serverStub.handleReceived(clone);
                 }
             }
         }
     }
     public void drop() {
-        transmission.drop("dropped and not sent because connection disconnected");
+        clientStub.drop("dropped and not sent because connection reset");
     }
 
 }

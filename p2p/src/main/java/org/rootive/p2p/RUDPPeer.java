@@ -1,9 +1,9 @@
 package org.rootive.p2p;
 
+import org.rootive.nio.rudp.RUDPConnection;
 import org.rootive.util.Linked;
 import org.rootive.nio.EventLoop;
-import org.rootive.nio.RUDPConnection;
-import org.rootive.nio.RUDPServer;
+import org.rootive.nio.rudp.RUDPManager;
 import org.rootive.nio_rpc.RUDPPeerStub;
 import org.rootive.rpc.*;
 
@@ -14,55 +14,36 @@ import java.nio.ByteBuffer;
 import java.util.function.BiConsumer;
 
 public class RUDPPeer {
-    static public class Context {
-        public RUDPPeerStub stub;
-        public Object context;
+    static public record Context(RUDPPeerStub stub, Object context) { }
 
-        public Context(RUDPPeerStub stub, Object context) {
-            this.stub = stub;
-            this.context = context;
-        }
-    }
-
-    static private final Signature peerSig = new Signature(RUDPPeer.class, "peer");
-
-    static private Function connectFunc;
-    static private Signature connectSig;
-
-    static private Function punchFunc;
-
-    static {
-        try {
-            connectFunc = new Function(RUDPPeer.class.getMethod("connect", String.class));
-            connectSig = new Signature(connectFunc, "connect");
-
-            punchFunc = new Function(RUDPPeer.class.getMethod("punch", String.class, String.class));
-        } catch (NoSuchMethodException e) {
-            assert false;
-        }
-    }
-
-    private final RUDPServer server;
+    private final RUDPManager manager;
     private final ServerStub serverStub = new ServerStub(null, null);
     private java.util.function.Function<RUDPConnection, Object> contextSetter = (c) -> null;
+    private BiConsumer<String, Runnable> dispatcher = (n, r) -> r.run();
 
-    static public BiConsumer<ByteBuffer, Return> getTransmission(RUDPConnection c) {
-        return ((Context) c.context).stub.getTransmission();
+    static public ClientStub getClientStub(RUDPConnection c) {
+        return ((Context) c.context).stub.getClientStub();
     }
 
-    public RUDPPeer(EventLoop eventLoop, int timersCount, int threadsCount) {
-        server = new RUDPServer(eventLoop, timersCount, threadsCount);
-        server.setReadCallback(this::onRead);
-        server.setDisconnectCallback(this::onDisconnect);
-        server.setContextSetter((c) -> new Context(new RUDPPeerStub(serverStub, c), contextSetter.apply(c)));
-
-        register("peer", this);
-        register("connect", connectFunc);
-        register("punch", punchFunc);
+    public RUDPPeer(EventLoop eventLoop, int threadsCount) {
+        manager = new RUDPManager(eventLoop, threadsCount);
+        manager.setReadCallback(this::onRead);
+        manager.setResetCallback(this::onReset);
+        manager.setContextSetter((c) -> {
+            var stub = new RUDPPeerStub(serverStub, c);
+            stub.setDispatcher(dispatcher);
+            return new Context(stub, contextSetter.apply(c));
+        });
     }
 
+    public ServerStub getServerStub() {
+        return serverStub;
+    }
     public void setContextSetter(java.util.function.Function<RUDPConnection, Object> contextSetter) {
         this.contextSetter = contextSetter;
+    }
+    public void setDispatcher(BiConsumer<String, Runnable> dispatcher) {
+        this.dispatcher = dispatcher;
     }
 
     public void register(String identifier, Function function) {
@@ -73,45 +54,21 @@ public class RUDPPeer {
     }
 
     public void init(InetSocketAddress local) throws IOException, InterruptedException {
-        server.init(local);
+        manager.init(local);
     }
 
-    public void connect(SocketAddress remote) {
-        server.connect(remote);
-    }
-    public void connect(String address) {
-        var g = address.indexOf(':');
-        connect(new InetSocketAddress(address.substring(0, g), Integer.parseInt(address.substring(g + 1))));
-    }
-    public void disconnect(SocketAddress remote) {
-        server.run(remote, RUDPConnection::disconnect);
-    }
-
-    public Return call(SocketAddress remote, Functor f) {
+    public Return callLiteral(SocketAddress remote, Functor f) {
         var ret = new Return();
-        server.run(remote, (c) -> f.callLiteral(getTransmission(c), ret));
+        manager.force(remote, (c) -> f.callLiteral(getClientStub(c), ret));
         return ret;
     }
-    public Return call(String address, Functor f) {
-        var g = address.indexOf(':');
-        return call(new InetSocketAddress(address.substring(0, g), Integer.parseInt(address.substring(g + 1))), f);
-    }
-    public Return force(SocketAddress remote, Functor f) {
+    public Return callBytes(SocketAddress remote, Functor f) {
         var ret = new Return();
-        server.force(remote, (c) -> f.callLiteral(getTransmission(c), ret));
+        manager.force(remote, (c) -> f.callBytes(getClientStub(c), ret));
         return ret;
     }
-    public Return force(String address, Functor f) {
-        var g = address.indexOf(':');
-        return force(new InetSocketAddress(address.substring(0, g), Integer.parseInt(address.substring(g + 1))), f);
-    }
 
-    public void punch(String a, String b) throws IOException {
-        call(a, connectFunc.newFunctor(connectSig, peerSig, b));
-        call(b, connectFunc.newFunctor(connectSig, peerSig, a));
-    }
-
-    private void onDisconnect(RUDPConnection c) {
+    private void onReset(RUDPConnection c) {
         ((Context) c.context).stub.drop();
     }
     private void onRead(RUDPConnection c, Linked<ByteBuffer> l) {

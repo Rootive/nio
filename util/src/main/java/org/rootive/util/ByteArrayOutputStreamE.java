@@ -5,6 +5,10 @@ import java.nio.ByteBuffer;
 
 public class ByteArrayOutputStreamE extends ByteArrayOutputStream {
 
+    public  ByteArrayOutputStreamE() { }
+    public ByteArrayOutputStreamE(int initialCapacity) {
+        super(initialCapacity);
+    }
     public byte[] getBuf() {
         return buf;
     }

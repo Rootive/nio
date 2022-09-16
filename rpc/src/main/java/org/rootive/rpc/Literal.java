@@ -6,15 +6,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.ByteBuffer;
 
 public class Literal implements Actor {
-    private ByteBuffer data;
+    private final ByteBuffer data;
 
     public Literal(Object obj) throws JsonProcessingException {
-        var json = new ObjectMapper().writeValueAsBytes(obj);
-        data = ByteBuffer.allocate(Constexpr.headerSize + json.length)
-                .putInt(json.length)
-                .put((byte) Type.Literal.ordinal())
-                .put(json)
-                .flip();
+        data = Util.single(new ObjectMapper().writeValueAsBytes(obj), Type.Literal);
     }
 
     @Override

@@ -11,6 +11,7 @@
         <module name="rpc" />
         <module name="nio" />
         <module name="p2p" />
+        <module name="example" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>

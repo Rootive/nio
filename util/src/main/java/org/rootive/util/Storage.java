@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.*;
 import java.util.function.Supplier;
-
 public class Storage<T> {
     private T v;
     private final String path;
@@ -13,19 +12,19 @@ public class Storage<T> {
         this.path = path;
     }
 
-    public void init() throws IOException {
+    public void init(Class<T> cls) throws IOException {
         var in = new FileInputStream(path);
         var data = in.readAllBytes();
         in.close();
 
-        v = (T) new ObjectMapper().readValue(data, v.getClass());
+        v = new ObjectMapper().readValue(data, cls);
     }
     public void init(T v) throws IOException {
         set(v);
     }
-    public void init(Supplier<T> s) throws IOException {
+    public void init(Class<T> cls, Supplier<T> s) throws IOException {
         if (new File(path).isFile()) {
-            init();
+            init(cls);
         } else {
             init(s.get());
         }
@@ -38,7 +37,9 @@ public class Storage<T> {
         set(v);
     }
     public void set(T v) throws IOException {
-        new ObjectMapper().writeValue(new FileOutputStream(path), v);
+        var out = new FileOutputStream(path);
+        new ObjectMapper().writeValue(out, v);
         this.v = v;
+        out.close();
     }
 }

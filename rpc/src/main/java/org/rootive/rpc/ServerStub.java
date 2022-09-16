@@ -12,36 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.rootive.util.LinkedByteBuffer;
 
 public class ServerStub {
-    static private final ByteBuffer doneGap = Gap.get(Return.Status.Done);
-    static private final ByteBuffer transmissionExceptionGap = Gap.get(Return.Status.TransmissionException);
-    static private final ByteBuffer parseExceptionGap = Gap.get(Return.Status.ParseException);
-    static private final ByteBuffer invocationExceptionGap = Gap.get(Return.Status.InvocationException);
-    static private ByteBuffer doneGap() {
-        return doneGap.duplicate();
-    }
-    static private ByteBuffer transmissionExceptionGap() {
-        return transmissionExceptionGap.duplicate();
-    }
-    static private ByteBuffer parseExceptionGap() {
-        return parseExceptionGap.duplicate();
-    }
-    static private ByteBuffer invocationExceptionGap() {
-        return invocationExceptionGap.duplicate();
-    }
-
-    static public ByteBuffer single(byte[] bs, Type type) {
-        return ByteBuffer.wrap(
-                        new byte[Constexpr.pre + Constexpr.headerSize + bs.length + Constexpr.post]
-                        , Constexpr.pre
-                        , Constexpr.headerSize + bs.length
-                )
-                .mark()
-                .putInt(bs.length)
-                .put((byte) type.ordinal())
-                .put(bs)
-                .reset();
-    }
-
     static private record Entry(Object object, boolean bProtected) { }
 
     private final ServerStub parent;
@@ -53,7 +23,6 @@ public class ServerStub {
         this.parent = parent;
         this.transmission = transmission;
     }
-
     public void setDispatcher(BiConsumer<String, Runnable> dispatcher) {
         this.dispatcher = dispatcher;
     }
@@ -129,6 +98,7 @@ public class ServerStub {
                     Object po = parse(ds, f.getObjectClass(), context);
                     Object[] ps = new Object[pcs.length];
                     for (var _i = 0; _i < ps.length; ++_i) {
+                        var _h = ds.head();
                         ps[_i] = parse(ds, pcs[_i], context);
                     }
                     try {
@@ -157,32 +127,33 @@ public class ServerStub {
         }
         return ret;
     }
-
     public void handleSignature(Collector c, String namespace) {
         ByteBuffer res = null, gap;
         try {
             var o = parse(c.getDone(), null, namespace);
             if (o instanceof byte[] bs && c.getContext() == Gap.Context.CallBytes) {
-                res = single(bs, Type.Bytes);
+                res = Util.single(bs, Type.Bytes);
             } else {
-                res = single(new ObjectMapper().writeValueAsBytes(o), Type.Literal);
+                res = Util.single(new ObjectMapper().writeValueAsBytes(o), Type.Literal);
             }
-            gap = doneGap();
+            gap = Gap.get(Gap.Context.Return, c.getCheck());
         } catch (ParseException | JsonProcessingException e) {
 
-            try { res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal); }
+            try { res = Util.single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal); }
             catch (JsonProcessingException ex) { assert false; }
-            gap = parseExceptionGap();
+            gap = Gap.get(Gap.Context.ParseException, c.getCheck());
 
         } catch (InvocationException e) {
 
-            try { res = single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal); }
+            try { res = Util.single(new ObjectMapper().writeValueAsBytes(e.getMessage()), Type.Literal); }
             catch (JsonProcessingException ex) { assert false; }
-            gap = invocationExceptionGap();
+            gap = Gap.get(Gap.Context.InvocationException, c.getCheck());
 
         }
-        transmission.accept(res);
-        transmission.accept(gap);
+        if (transmission != null) {
+            transmission.accept(res);
+            transmission.accept(gap);
+        }
     }
     public void handleReceived(Collector c) {
         var d = c.getDone().head();
@@ -193,11 +164,13 @@ public class ServerStub {
         } else {
 
             ByteBuffer res = null, gap;
-            try { res = single(new ObjectMapper().writeValueAsBytes("expect signature here"), Type.Literal); }
+            try { res = Util.single(new ObjectMapper().writeValueAsBytes("expect signature here"), Type.Literal); }
             catch (JsonProcessingException e) { assert false; }
-            gap = parseExceptionGap();
-            transmission.accept(res);
-            transmission.accept(gap);
+            gap = Gap.get(Gap.Context.ParseException, c.getCheck());
+            if (transmission != null) {
+                transmission.accept(res);
+                transmission.accept(gap);
+            }
 
         }
     }
