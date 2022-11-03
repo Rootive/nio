@@ -3,7 +3,7 @@ package org.rootive.rpc.server;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.rootive.rpc.*;
-import org.rootive.rpc.util.LinkedByteBuffer;
+import org.rootive.util.LinkedByteBuffer;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;

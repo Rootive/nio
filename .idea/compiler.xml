@@ -7,6 +7,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="nio_rpc" />
+        <module name="distributed" />
         <module name="util" />
         <module name="rpc" />
         <module name="nio" />

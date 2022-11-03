@@ -1,6 +1,6 @@
 package org.rootive.rpc;
 
-import org.rootive.rpc.util.LinkedByteBuffer;
+import org.rootive.util.LinkedByteBuffer;
 
 import java.nio.ByteBuffer;
 
