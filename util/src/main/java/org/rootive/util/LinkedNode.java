@@ -16,19 +16,19 @@ public class LinkedNode<T> {
     public LinkedNode<T> right() {
         return r;
     }
-    void lSplit() {
+    void breakLeft() {
         if (l != null) {
             l.r = null;
             l = null;
         }
     }
-    void rSplit() {
+    void breakRight() {
         if (r != null) {
             r.l = null;
             r = null;
         }
     }
-    void split() {
+    void escape() {
         if (l != null) {
             l.r = r;
         }
@@ -37,7 +37,7 @@ public class LinkedNode<T> {
         }
         l = r = null;
     }
-    void link(LinkedNode<T> n) {
+    void linkRight(LinkedNode<T> n) {
         n.l = this;
         r = n;
     }

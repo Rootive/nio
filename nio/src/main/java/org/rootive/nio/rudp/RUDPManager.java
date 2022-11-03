@@ -3,7 +3,6 @@ package org.rootive.nio.rudp;
 import org.rootive.nio.EventLoop;
 import org.rootive.nio.Handler;
 import org.rootive.nio.LoopThreadPool;
-import org.rootive.util.Linked;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

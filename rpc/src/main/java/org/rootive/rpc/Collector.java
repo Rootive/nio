@@ -1,7 +1,5 @@
 package org.rootive.rpc;
 
-import org.rootive.util.LinkedByteBuffer;
-
 import java.nio.ByteBuffer;
 
 public class Collector extends Gap {

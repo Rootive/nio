@@ -5,14 +5,14 @@ public class Linked<T> {
     private LinkedNode<T> t;
 
     public Linked() { }
-    Linked(LinkedNode<T> h, LinkedNode<T> t) {
+    public Linked(LinkedNode<T> h, LinkedNode<T> t) {
         this.h = h;
         this.t = t;
     }
     public void addLast(T v) {
         var n = new LinkedNode<>(v);
         if (t != null) {
-            t.link(n);
+            t.linkRight(n);
         } else {
             h = n;
         }
@@ -21,7 +21,7 @@ public class Linked<T> {
     public void addFirst(T v) {
         var n = new LinkedNode<>(v);
         if (h != null) {
-            n.link(h);
+            n.linkRight(h);
         } else {
             t = n;
         }
@@ -33,7 +33,7 @@ public class Linked<T> {
         if (h == null) {
             t = null;
         }
-        ret.rSplit();
+        ret.breakRight();
         return ret.v;
     }
     public T removeLast() {
@@ -42,7 +42,7 @@ public class Linked<T> {
         if (t == null) {
             h = null;
         }
-        ret.lSplit();
+        ret.breakLeft();
         return ret.v;
     }
 
@@ -63,32 +63,31 @@ public class Linked<T> {
     public void link(Linked<T> a) {
         if (!a.isEmpty()) {
             if (t != null) {
-                t.link(a.h);
+                t.linkRight(a.h);
             } else {
                 h = a.h;
             }
             t = a.t;
         }
     }
-    public Linked<T> lSplit(LinkedNode<T> n) {
+    public Linked<T> breakLeft(LinkedNode<T> n) {
         Linked<T> ret;
         if (h != n) {
             ret = new Linked<>(h, n.left());
             h = n;
-            n.lSplit();
+            n.breakLeft();
         } else {
             ret = new Linked<>();
         }
         return ret;
     }
-    public void split(LinkedNode<T> n) {
+    public void escape(LinkedNode<T> n) {
         if (n == h) {
             h = n.right();
         }
         if (n == t) {
             t = n.left();
         }
-        n.split();
+        n.escape();
     }
-
 }

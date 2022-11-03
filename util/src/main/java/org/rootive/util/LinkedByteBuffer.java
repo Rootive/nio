@@ -1,122 +1,93 @@
 package org.rootive.util;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ByteChannel;
 
 public class LinkedByteBuffer {
     private final Linked<ByteBuffer> linked = new Linked<>();
-    private int remaining;
+    private int total;
     private int count;
 
-    public Linked<ByteBuffer> getLinked() {
-        return linked;
-    }
     public int writeTo(ByteChannel byteChannel) throws IOException {
-        int ret = remaining;
+        int ret = total;
         while (!linked.isEmpty()) {
-            var buffer = removeFirst();
-            byteChannel.write(buffer);
-            if (buffer.remaining() > 0) {
-                addFirst(buffer);
+            var byteBuffer = removeFirst();
+            byteChannel.write(byteBuffer);
+            if (byteBuffer.remaining() > 0) {
+                addFirst(byteBuffer);
                 break;
             }
         }
-        return ret - remaining;
+        return ret - total;
     }
-    public void writeTo(OutputStream output) throws IOException {
-        while (!linked.isEmpty()) {
-            var buffer = removeFirst();
-            try {
-                output.write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
-            } catch (IOException e) {
-                addFirst(buffer);
-                throw e;
-            }
-        }
-    }
-    public int readFrom(ByteChannel byteChannel, int elementSize) throws IOException {
-        int ret = remaining;
+    public int readFrom(ByteChannel byteChannel, int unitSize) throws IOException {
+        int ret = total;
         while (true) {
-            ByteBuffer buffer = ByteBuffer.allocate(elementSize);
-            int res = byteChannel.read(buffer);
+            ByteBuffer byteBuffer = ByteBuffer.allocate(unitSize);
+            int res = byteChannel.read(byteBuffer);
             if (res == -1) {
                 ret = -1;
                 break;
             } else if (res == 0) {
-                ret = remaining - ret;
+                ret = total - ret;
                 break;
             } else {
-                buffer.limit(buffer.position());
-                buffer.position(0);
-                addLast(buffer);
+                byteBuffer.flip();
+                addLast(byteBuffer);
             }
         }
         return ret;
-    }
-    public int readFrom(InputStream input, int elementSize) throws IOException {
-        int ret = remaining;
-        while (true) {
-            ByteBuffer buffer = ByteBuffer.allocate(elementSize);
-            int res = input.read(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
-            if (res == -1) {
-                break;
-            } else {
-                buffer.limit(buffer.position() + res);
-                addLast(buffer);
-            }
-        }
-        return remaining - ret;
     }
 
-    public ByteBuffer toByteBuffer() {
-        ByteBuffer ret = ByteBuffer.allocate(remaining);
-        var n = linked.head();
-        while (n != null) {
-            ret.put(n.v.duplicate());
-            n = n.right();
+    public void defrag() {
+        ByteBuffer ret = ByteBuffer.allocate(total);
+        while (!linked.isEmpty()) {
+            ret.put(linked.removeFirst());
         }
-        ret.flip();
-        return ret;
+        addLast(ret.flip());
     }
 
     public void addFirst(ByteBuffer value) {
         ++count;
-        remaining += value.remaining();
+        total += value.remaining();
         linked.addFirst(value);
     }
     public void addLast(ByteBuffer value) {
         ++count;
-        remaining += value.remaining();
+        total += value.remaining();
         linked.addLast(value);
     }
+
     public ByteBuffer removeFirst() {
         --count;
-        remaining -= linked.head().v.remaining();
+        total -= linked.head().v.remaining();
         return linked.removeFirst();
     }
     public ByteBuffer removeLast() {
         --count;
-        remaining -= linked.tail().v.remaining();
+        total -= linked.tail().v.remaining();
         return linked.removeLast();
     }
-    public ByteBuffer head() {
+
+    public ByteBuffer peekFirst() {
         return linked.isEmpty() ? null : linked.head().v.duplicate();
     }
-    public ByteBuffer tail() {
+    public ByteBuffer peekLast() {
         return linked.isEmpty() ? null : linked.tail().v.duplicate();
     }
+
     public boolean isEmpty() {
         return linked.isEmpty();
     }
     public void clear() {
         linked.clear();
-        remaining = 0;
+        total = 0;
+        count = 0;
     }
-    public int totalRemaining() {
-        return remaining;
+
+    public int total() {
+        return total;
     }
     public int count() {
         return count;

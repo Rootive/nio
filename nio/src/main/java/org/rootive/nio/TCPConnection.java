@@ -1,7 +1,5 @@
 package org.rootive.nio;
 
-import org.rootive.util.LinkedByteBuffer;
-
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;

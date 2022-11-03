@@ -1,7 +1,6 @@
 package org.rootive.nio.rudp;
 
 import org.rootive.nio.Loop;
-import org.rootive.util.Linked;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
