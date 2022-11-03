@@ -5,15 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.ByteBuffer;
 
-public class Literal implements Actor {
-    private final ByteBuffer data;
+public class Literal implements Line {
 
-    public Literal(Object obj) throws JsonProcessingException {
-        data = Util.single(new ObjectMapper().writeValueAsBytes(obj), Type.Literal);
+    private final ByteBuffer byteBuffer;
+
+    public Literal(Object object) throws JsonProcessingException {
+        final byte[] bytes = new ObjectMapper().writeValueAsBytes(object);
+        byteBuffer = Util.line(Type.Literal, ByteBuffer.wrap(bytes));
     }
 
     @Override
-    public ByteBuffer getData() {
-        return data.duplicate();
+    public ByteBuffer toByteBuffer() {
+        return byteBuffer.duplicate();
     }
 }

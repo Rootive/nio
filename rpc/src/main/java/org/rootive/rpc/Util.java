@@ -2,13 +2,14 @@ package org.rootive.rpc;
 
 import java.nio.ByteBuffer;
 
-public final class Util {
-    static public ByteBuffer single(byte[] bs, Type type) {
+public class Util {
+    static public ByteBuffer line(Type type, ByteBuffer byteBuffer) {
+        var lineSize = byteBuffer.remaining() + Constexpr.typeSize;
         return ByteBuffer
-                .allocate(Constexpr.headerSize + bs.length)
-                .putInt(bs.length)
+                .allocate(Constexpr.sizeSize + lineSize)
+                .putInt(lineSize)
                 .put((byte) type.ordinal())
-                .put(bs)
+                .put(byteBuffer)
                 .flip();
     }
 }

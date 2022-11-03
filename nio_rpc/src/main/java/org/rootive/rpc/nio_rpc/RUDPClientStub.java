@@ -1,0 +1,20 @@
+package org.rootive.rpc.nio_rpc;
+
+import org.rootive.rpc.nio.rudp.RUDPConnection;
+import org.rootive.rpc.nio.rudp.RUDPPieces;
+import org.rootive.rpc.client.ClientStub;
+
+import java.nio.ByteBuffer;
+
+public class RUDPClientStub extends ClientStub {
+    private final RUDPConnection connection;
+
+    public RUDPClientStub(RUDPConnection c) {
+        this.connection = c;
+    }
+
+    @Override
+    protected void send(ByteBuffer d) {
+        connection.message(new RUDPPieces(d));
+    }
+}

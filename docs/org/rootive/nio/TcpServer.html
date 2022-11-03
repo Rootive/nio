@@ -29,7 +29,7 @@ var activeTableTab = "active-table-tab";
 <h1 title="类 TcpServer" class="title">类 TcpServer</h1>
 </div>
 <div class="inheritance" title="继承树"><a href="https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/Object.html" title="java.lang中的类或接口" class="external-link">java.lang.Object</a>
-<div class="inheritance">org.rootive.nio.TCPServer</div>
+<div class="inheritance">nio.org.rootive.rpc.TCPServer</div>
 </div>
 <section class="class-description" id="class-description">
 <hr>
@@ -85,7 +85,7 @@ var activeTableTab = "active-table-tab";
 <div class="block">初始化，最大的作用是集中服务器启动时的所有异常。</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setThreadInitFunction(org.rootive.nio.EventLoopThread.ThreadInitFunction)" class="member-name-link">setThreadInitFunction</a><wbr>(org.rootive.nio.EventLoopThread.ThreadInitFunction&nbsp;threadInitFunction)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setThreadInitFunction(nio.org.rootive.rpc.EventLoopThread.ThreadInitFunction)" class="member-name-link">setThreadInitFunction</a><wbr>(nio.org.rootive.rpc.EventLoopThread.ThreadInitFunction&nbsp;threadInitFunction)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#start()" class="member-name-link">start</a>()</code></div>
@@ -124,9 +124,9 @@ var activeTableTab = "active-table-tab";
 <h2>方法详细资料</h2>
 <ul class="member-list">
 <li>
-<section class="detail" id="setThreadInitFunction(org.rootive.nio.EventLoopThread.ThreadInitFunction)">
+<section class="detail" id="setThreadInitFunction(nio.org.rootive.rpc.EventLoopThread.ThreadInitFunction)">
 <h3>setThreadInitFunction</h3>
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setThreadInitFunction</span><wbr><span class="parameters">(org.rootive.nio.EventLoopThread.ThreadInitFunction&nbsp;threadInitFunction)</span></div>
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setThreadInitFunction</span><wbr><span class="parameters">(nio.org.rootive.rpc.EventLoopThread.ThreadInitFunction&nbsp;threadInitFunction)</span></div>
 <dl class="notes">
 <dt>参数:</dt>
 <dd><code>threadInitFunction</code> - 子线程启动后首先执行的方法。该方法的执行属于服务器启动时，其产生的异常将从<a href="#init(java.net.InetSocketAddress)"><code>init(InetSocketAddress)</code></a>抛出。</dd>
@@ -147,7 +147,7 @@ var activeTableTab = "active-table-tab";
 <dt>另请参阅:</dt>
 <dd>
 <ul class="see-list-long">
-<li><a href="#setThreadInitFunction(org.rootive.nio.EventLoopThread.ThreadInitFunction)"><code>setThreadInitFunction(EventLoopThread.ThreadInitFunction)</code></a></li>
+<li><a href="#setThreadInitFunction(nio.org.rootive.rpc.EventLoopThread.ThreadInitFunction)"><code>setThreadInitFunction(EventLoopThread.ThreadInitFunction)</code></a></li>
 </ul>
 </dd>
 </dl>

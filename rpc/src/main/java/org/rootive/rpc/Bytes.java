@@ -2,14 +2,15 @@ package org.rootive.rpc;
 
 import java.nio.ByteBuffer;
 
-public class Bytes implements Actor {
-    private final ByteBuffer data;
+public class Bytes implements Line {
 
-    public Bytes(byte[] bytes) {
-        data = Util.single(bytes, Type.Bytes);
+    private final ByteBuffer byteBuffer;
+
+    public Bytes(ByteBuffer byteBuffer) {
+        this.byteBuffer = Util.line(Type.Bytes, byteBuffer);
     }
-
-    public ByteBuffer getData() {
-        return data.duplicate();
+    @Override
+    public ByteBuffer toByteBuffer() {
+        return byteBuffer.duplicate();
     }
 }

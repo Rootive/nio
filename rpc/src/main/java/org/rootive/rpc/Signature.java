@@ -2,39 +2,25 @@ package org.rootive.rpc;
 
 import java.nio.ByteBuffer;
 
-public class Signature implements Actor {
-    private final ByteBuffer data;
+public class Signature implements Line {
 
-    public static String namespaceStringOf(Class<?> cls) {
-        return cls.getName();
-    }
-    public static String namespaceStringOf(Object obj) {
-        return obj.getClass().getName();
-    }
-    public static String namespaceStringOf(Function function) {
-        return function.getObjectClass().getName();
+
+    private final ByteBuffer byteBuffer;
+
+    public static String namespaceStringOf(Class<?> aClass) {
+        return aClass.getName();
     }
 
     public Signature(String namespaceString, String identifier) {
-        var bs = (namespaceString + ' ' + identifier).getBytes();
-        data = ByteBuffer.allocate(bs.length + Constexpr.headerSize)
-                .putInt(bs.length)
-                .put((byte) Type.Signature.ordinal())
-                .put(bs)
-                .flip();
+        var bytes = (namespaceString + ' ' + identifier).getBytes();
+        byteBuffer = Util.line(Type.Signature, ByteBuffer.wrap(bytes));
     }
-    public Signature(Class<?> cls, String identifier) {
-        this(namespaceStringOf(cls), identifier);
-    }
-    public Signature(Object obj, String identifier) {
-        this(namespaceStringOf(obj), identifier);
-    }
-    public Signature(Function function, String identifier) {
-        this(namespaceStringOf(function), identifier);
+    public Signature(Class<?> aClass, String identifier) {
+        this(namespaceStringOf(aClass), identifier);
     }
 
-    public ByteBuffer getData() {
-        return data.duplicate();
+    @Override
+    public ByteBuffer toByteBuffer() {
+        return byteBuffer.duplicate();
     }
-
 }
