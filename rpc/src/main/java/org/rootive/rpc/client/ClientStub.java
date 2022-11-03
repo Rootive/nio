@@ -1,4 +1,8 @@
-package org.rootive.rpc;
+package org.rootive.rpc.client;
+
+import org.rootive.rpc.Collector;
+import org.rootive.rpc.Gap;
+import org.rootive.rpc.common.Return;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;

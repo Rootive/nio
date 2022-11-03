@@ -10,17 +10,17 @@
         <module name="util" />
         <module name="rpc" />
         <module name="nio" />
-        <module name="p2p" />
-        <module name="example" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="annotation" target="17" />
       <module name="Consensus" target="17" />
       <module name="consensus" target="17" />
+      <module name="example" target="17" />
       <module name="HTTP" target="17" />
       <module name="http" target="17" />
       <module name="log" target="17" />
+      <module name="p2p" target="17" />
       <module name="processor" target="17" />
       <module name="test" target="17" />
       <module name="untitled" target="17" />

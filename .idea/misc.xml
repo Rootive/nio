@@ -25,6 +25,7 @@
         <option value="$PROJECT_DIR$/consensus/pom.xml" />
         <option value="$PROJECT_DIR$/http/pom.xml" />
         <option value="$PROJECT_DIR$/log/pom.xml" />
+        <option value="$PROJECT_DIR$/p2p/pom.xml" />
         <option value="$PROJECT_DIR$/test/pom.xml" />
       </set>
     </option>

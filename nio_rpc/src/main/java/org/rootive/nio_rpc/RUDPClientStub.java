@@ -2,7 +2,7 @@ package org.rootive.nio_rpc;
 
 import org.rootive.nio.rudp.RUDPConnection;
 import org.rootive.nio.rudp.RUDPPieces;
-import org.rootive.rpc.ClientStub;
+import org.rootive.rpc.client.ClientStub;
 
 import java.nio.ByteBuffer;
 

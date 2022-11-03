@@ -13,7 +13,6 @@
         <module>rpc</module>
         <module>nio_rpc</module>
         <module>util</module>
-        <module>p2p</module>
     </modules>
 
     <properties>

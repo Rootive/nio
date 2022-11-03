@@ -1,5 +1,7 @@
 package org.rootive.rpc;
 
+import org.rootive.rpc.client.ClientStub;
+import org.rootive.rpc.common.Return;
 import org.rootive.util.ByteArrayOutputStreamE;
 
 import java.io.IOException;
