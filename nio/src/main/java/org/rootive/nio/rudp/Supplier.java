@@ -1,4 +1,4 @@
-package org.rootive.rpc.nio.rudp;
+package org.rootive.nio.rudp;
 
 import java.nio.ByteBuffer;
 

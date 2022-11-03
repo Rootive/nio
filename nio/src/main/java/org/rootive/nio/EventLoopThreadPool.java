@@ -1,4 +1,4 @@
-package org.rootive.rpc.nio;
+package org.rootive.nio;
 
 import java.util.ArrayList;
 import java.util.function.Consumer;
@@ -7,9 +7,9 @@ public class EventLoopThreadPool {
     private int last = -1;
     private final ArrayList<EventLoopThread> threads = new ArrayList<>();
 
-    public EventLoopThreadPool(int count) {
+    public EventLoopThreadPool(int count, Class<? extends EventLoop> eventLoopClass) {
         for (int _i = 0; _i < count; ++_i) {
-            threads.add(new EventLoopThread());
+            threads.add(new EventLoopThread(eventLoopClass));
         }
     }
 

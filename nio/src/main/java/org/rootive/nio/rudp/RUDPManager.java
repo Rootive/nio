@@ -1,8 +1,10 @@
-package org.rootive.rpc.nio.rudp;
+package org.rootive.nio.rudp;
 
-import org.rootive.rpc.nio.EventLoop;
-import org.rootive.rpc.nio.Handler;
-import org.rootive.rpc.nio.LoopThreadPool;
+import org.rootive.nio.EventLoopThreadPool;
+import org.rootive.nio.Handler;
+import org.rootive.nio.PlainEventLoop;
+import org.rootive.nio.SelectEventLoop;
+import org.rootive.util.Linked;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -19,28 +21,28 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class RUDPManager implements Handler {
-    static public record Vector(SocketAddress a, ByteBuffer b) { }
-    static public int connectionPeriod = 40;
+    public record Vector(SocketAddress socketAddress, ByteBuffer byteBuffer) { }
+    static public int connectionPeriod = 50;
     static public long lastReceiveLine = 8 * 1000;
 
     private SocketAddress local;
     private DatagramChannel channel;
     private SelectionKey selectionKey;
 
-    private final EventLoop eventLoop;
-    private final LoopThreadPool connectionThreads;
-    private final Timer connectionTimer = new Timer();
+    private final SelectEventLoop selectEventLoop;
+    private final EventLoopThreadPool eventLoopThreadPool;
+    private final Timer timer = new Timer();
 
     private final Linked<Vector> unsent = new Linked<>();
     private final HashMap<SocketAddress, RUDPConnection> connections = new HashMap<>();
 
     private BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback;
     private Consumer<RUDPConnection> resetCallback;
-    private Function<RUDPConnection, Object> contextSetter = (c) -> null;
+    private Function<RUDPConnection, Object> contextSetter = (rudpConnection) -> null;
 
-    public RUDPManager(EventLoop eventLoop, int threadsCount) {
-        this.eventLoop = eventLoop;
-        connectionThreads = new LoopThreadPool(threadsCount);
+    public RUDPManager(SelectEventLoop selectEventLoop, int threadsCount) {
+        this.selectEventLoop = selectEventLoop;
+        eventLoopThreadPool = new EventLoopThreadPool(threadsCount, PlainEventLoop.class);
     }
 
     public void setReadCallback(BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback) {
@@ -55,25 +57,25 @@ public class RUDPManager implements Handler {
 
     public void init(InetSocketAddress local) throws InterruptedException, IOException {
         this.local = local;
-        connectionThreads.start();
-        connectionTimer.schedule(new TimerTask() {
+        eventLoopThreadPool.start();
+        timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                eventLoop.run(() -> {
+                selectEventLoop.run(() -> {
                     ArrayList<SocketAddress> delete = new ArrayList<>();
                     var currentTimeMillis = System.currentTimeMillis();
-                    for (var v : connections.entrySet()) {
-                        var c = v.getValue();
-                        if (currentTimeMillis - c.lastReceive >= lastReceiveLine) {
+                    for (var entry : connections.entrySet()) {
+                        var connection = entry.getValue();
+                        if (currentTimeMillis - connection.lastReceive >= lastReceiveLine) {
                             System.out.println("timeout");
-                            delete.add(v.getKey());
+                            delete.add(entry.getKey());
                             continue;
                         }
-                        c.next();
+                        connection.next();
                     }
-                    for (var a : delete) {
-                        var c = connections.remove(a);
-                        c.getLoop().run(c::reset);
+                    for (var socketAddress : delete) {
+                        var connection = connections.remove(socketAddress);
+                        connection.getEventLoop().run(connection::reset);
                     }
                 });
             }
@@ -82,26 +84,27 @@ public class RUDPManager implements Handler {
         channel = DatagramChannel.open();
         channel.configureBlocking(false);
         channel.bind(local);
-        selectionKey = eventLoop.add(channel, SelectionKey.OP_READ, this);
+        selectionKey = selectEventLoop.add(channel, SelectionKey.OP_READ, this);
     }
 
     private RUDPConnection newConnection(SocketAddress remote) {
-        RUDPConnection ret = new RUDPConnection(this, local, remote, connectionThreads.get().getLoop());
+        RUDPConnection ret = new RUDPConnection(this, local, remote, eventLoopThreadPool.get().getEventLoop());
         ret.setReadCallback(readCallback);
         ret.setResetCallback(resetCallback);
         ret.context = contextSetter.apply(ret);
         return ret;
     }
-    public void force(SocketAddress remote, Consumer<RUDPConnection> cr) {
-        eventLoop.run(() -> {
-            var c = connections.get(remote);
-            if (c == null) {
-                c = newConnection(remote);
-                c.lastReceive = System.currentTimeMillis();
-                connections.put(remote, c);
+
+    public void force(SocketAddress remote, Consumer<RUDPConnection> consumer) {
+        selectEventLoop.run(() -> {
+            var rudpConnection = connections.get(remote);
+            if (rudpConnection == null) {
+                rudpConnection = newConnection(remote);
+                rudpConnection.lastReceive = System.currentTimeMillis();
+                connections.put(remote, rudpConnection);
             }
-            RUDPConnection finalC = c;
-            connectionThreads.get().getLoop().run(() -> cr.accept(finalC));
+            RUDPConnection finalC = rudpConnection;
+            rudpConnection.getEventLoop().run(() -> consumer.accept(finalC));
         });
     }
 
@@ -140,11 +143,11 @@ public class RUDPManager implements Handler {
         while (!unsent.isEmpty()) {
             var s = unsent.removeFirst();
             try {
-                channel.send(s.b, s.a);
+                channel.send(s.byteBuffer, s.socketAddress);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            if (s.b.remaining() > 0) {
+            if (s.byteBuffer.remaining() > 0) {
                 unsent.addFirst(s);
                 break;
             }
@@ -154,18 +157,18 @@ public class RUDPManager implements Handler {
         }
     }
 
-    void send(RUDPConnection a, ByteBuffer b) {
-        eventLoop.run(() -> {
-            var s = new Vector(a.getRemote(), b);
+    void send(RUDPConnection connection, ByteBuffer byteBuffer) {
+        selectEventLoop.run(() -> {
+            var vector = new Vector(connection.getRemote(), byteBuffer);
             if (unsent.isEmpty()) {
                 try {
-                    channel.send(s.b, s.a);
+                    channel.send(vector.byteBuffer, vector.socketAddress);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
-            if (s.b.remaining() > 0) {
-                unsent.addLast(s);
+            if (vector.byteBuffer.remaining() > 0) {
+                unsent.addLast(vector);
                 if (!selectionKey.isWritable()) {
                     selectionKey.interestOpsOr(SelectionKey.OP_WRITE);
                 }

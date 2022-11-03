@@ -1,6 +1,7 @@
-package org.rootive.rpc.nio.rudp;
+package org.rootive.nio.rudp;
 
-import org.rootive.rpc.nio.Loop;
+import org.rootive.nio.EventLoop;
+import org.rootive.util.Linked;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -10,13 +11,13 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class RUDPConnection {
-    static public record Datagram(int count, ByteBuffer data) { }
+    public record Datagram(int count, ByteBuffer data) { }
 
     long lastReceive;
 
     private final RUDPManager server;
     private final SocketAddress remote;
-    private final Loop loop;
+    private final EventLoop eventLoop;
     private final boolean addressCompare;
 
     private BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback;
@@ -45,10 +46,10 @@ public class RUDPConnection {
         assert a.getPort() != b.getPort();
         return a.getPort() < b.getPort();
     }
-    RUDPConnection(RUDPManager server, SocketAddress local, SocketAddress remote, Loop loop) {
+    RUDPConnection(RUDPManager server, SocketAddress local, SocketAddress remote, EventLoop eventLoop) {
         this.server = server;
         this.remote = remote;
-        this.loop = loop;
+        this.eventLoop = eventLoop;
         localCheck = System.currentTimeMillis();
         addressCompare = addressCompare((InetSocketAddress) local, (InetSocketAddress) remote);
     }
@@ -56,8 +57,8 @@ public class RUDPConnection {
     public SocketAddress getRemote() {
         return remote;
     }
-    public Loop getLoop() {
-        return loop;
+    public EventLoop getEventLoop() {
+        return eventLoop;
     }
     void setReadCallback(BiConsumer<RUDPConnection, Linked<ByteBuffer>> readCallback) {
         this.readCallback = readCallback;
@@ -66,19 +67,20 @@ public class RUDPConnection {
         this.resetCallback = resetCallback;
     }
 
-
     public void message(Supplier supplier) {
-        unsent.addLast(supplier);
+        eventLoop.run(() -> {
+            unsent.addLast(supplier);
+        });
     }
     void next() {
-        loop.run(() -> {
+        eventLoop.run(() -> {
             if (unconfirmed.isEmpty()) {
                 if (!unsent.isEmpty()) {
-                    var actor = unsent.removeFirst();
-                    while (!actor.empty()) {
-                        var d = actor.next(localCheck, remoteCheck, ++sentCount);
-                        unconfirmed.addLast(new Datagram(sentCount, d));
-                        server.send(this, d.duplicate());
+                    var supplier = unsent.removeFirst();
+                    while (!supplier.empty()) {
+                        var byteBuffer = supplier.next(localCheck, remoteCheck, ++sentCount);
+                        unconfirmed.addLast(new Datagram(sentCount, byteBuffer));
+                        server.send(this, byteBuffer.duplicate());
                     }
                 }
             } else {
@@ -164,7 +166,7 @@ public class RUDPConnection {
         return ret;
     }
     void handleReceive(ByteBuffer b) {
-        loop.run(() -> {
+        eventLoop.run(() -> {
             if (b.remaining() >= Constexpr.checkSize) {
                 if (updateCheck(b.getLong(), b.getLong())) {
                     if (b.remaining() >= Constexpr.countSize) {
@@ -216,7 +218,7 @@ public class RUDPConnection {
             ready = received;
             received = new Linked<>();
         } else {
-            ready = received.lSplit(n);
+            ready = received.breakLeft(n);
         }
 
         if (!ready.isEmpty() && readCallback != null) {
@@ -227,7 +229,7 @@ public class RUDPConnection {
         var n = unconfirmed.head();
         while (n != null) {
             if (c == n.v.count) {
-                unconfirmed.split(n);
+                unconfirmed.escape(n);
                 break;
             } else if (c < n.v.count) {
                 break;

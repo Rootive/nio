@@ -1,26 +1,22 @@
-package org.rootive.rpc.nio;
+package org.rootive.nio;
+
+import org.rootive.util.Linked;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class Loop {
+public class PlainEventLoop implements EventLoop{
+    private final long threadID = Thread.currentThread().getId();
     private final AtomicBoolean bStarted = new AtomicBoolean();
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition condition = lock.newCondition();
     private Linked<Runnable> runnables = new Linked<>();
-    private final long threadId = Thread.currentThread().getId();
 
-    public long getThreadId() {
-        return threadId;
-    }
-    public boolean isStarted() { return bStarted.get(); }
-    public boolean isThread() {
-        return Thread.currentThread().getId() == threadId;
-    }
 
+    @Override
     public void start() {
-        assert threadId == Thread.currentThread().getId();
+        assert threadID == Thread.currentThread().getId();
         assert !bStarted.get();
         bStarted.set(true);
         while (bStarted.get()) {
@@ -39,23 +35,38 @@ public class Loop {
                 n.v.run();
                 n = n.right();
             }
-
         }
     }
+
+    @Override
     public void stop() {
         bStarted.set(false);
         lock.lock();
         condition.signal();
         lock.unlock();
     }
+
+    @Override
     public void run(Runnable runnable) {
-        if (isThread()) { runnable.run(); }
+        if (getThreadID() == Thread.currentThread().getId()) { runnable.run(); }
         else { queue(runnable); }
     }
+
+    @Override
     public void queue(Runnable runnable) {
         lock.lock();
         runnables.addLast(runnable);
         condition.signal();
         lock.unlock();
+    }
+
+    @Override
+    public long getThreadID() {
+        return threadID;
+    }
+
+    @Override
+    public boolean isStarted() {
+        return bStarted.get();
     }
 }

@@ -1,4 +1,4 @@
-package org.rootive.rpc.nio.rudp;
+package org.rootive.nio.rudp;
 
 public class Constexpr {
     public static final int MTU = 548;

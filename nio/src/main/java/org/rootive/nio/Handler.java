@@ -1,4 +1,4 @@
-package org.rootive.rpc.nio;
+package org.rootive.nio;
 
 public interface Handler {
     void handleEvent();
