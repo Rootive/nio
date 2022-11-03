@@ -46,7 +46,7 @@ public class RUDPRaft {
     private final Linked<_AppendEntries> unconfirmed = new Linked<>();
     private final AtomicInteger state = new AtomicInteger();
     private final int id;
-    private int leaderId = -2;
+    private int leaderID = -2;
     private final Random rand = new Random();
 
     private final ScheduledThreadPoolExecutor timers = new ScheduledThreadPoolExecutor(1);
@@ -113,7 +113,7 @@ public class RUDPRaft {
     private void toLeader() {
         System.out.println("to leader");
         future.cancel(false);
-        leaderId = id;
+        leaderID = id;
         state.set(Raft.State.Leader.ordinal());
         Arrays.fill(nextIndex, log.get().size());
         Arrays.fill(matchIndex, 0);
@@ -286,7 +286,7 @@ public class RUDPRaft {
 
         System.out.println("appended by " + leaderId);
         future.cancel(false);
-        this.leaderId = leaderId;
+        this.leaderID = leaderId;
         if (term > currentTerm.get()) {
             newTerm(term);
         }
